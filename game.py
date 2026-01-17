@@ -81,6 +81,9 @@ class Game:
         self.lasers = []
         self.exit_door = None
         self.exit_open = False
+        self.keys = []  # List of key positions (offgrid tiles)
+        self.doors = []  # List of door positions (offgrid tiles)
+        self.has_key = False  # Track if player has collected a key
         
         self.level = 0
         self.load_level(self.level)
@@ -112,6 +115,9 @@ class Game:
         self.lasers = []
         self.exit_door = None
         self.exit_open = False
+        self.keys = []  # List of key positions (offgrid tiles)
+        self.doors = []  # List of door positions (offgrid tiles)
+        self.has_key = False  # Reset key collection status
         
         for spawner in self.tilemap.extract([('spawners', 0), ('spawners', 1), ('spawners', 2), 
                                              ('spawners', 3), ('spawners', 6), ('spawners', 7)]):
@@ -132,6 +138,14 @@ class Game:
                 self.lasers.append({'pos': pos, 'size': (16, 240), 'active': True})
             elif variant == 7:  # Exit door
                 self.exit_door = {'pos': pos, 'size': (16, 32)}
+        
+        # Extract keys and doors from offgrid tiles
+        # Note: Keys and doors are stored in offgrid_tiles with their centered positions
+        for tile in self.tilemap.offgrid_tiles:
+            if tile['type'] == 'key':
+                self.keys.append(tile)  # Store the tile directly
+            elif tile['type'] == 'door':
+                self.doors.append(tile)  # Store the tile directly
         
         self.scroll = [0, 0]
         self.dead = 0
@@ -444,7 +458,50 @@ class Game:
             if not self.dead:
                 self.player.render(self.display, offset=render_scroll)
             
-            # Render game elements
+            # Check key collection
+            if not self.dead and not self.transition_active:
+                player_rect = self.player.rect()
+                for key_tile in self.keys[:]:  # Use slice to iterate over copy
+                    key_img = self.assets['key'][0]
+                    # Get tight bounding rect around non-transparent pixels
+                    bounding_rect = key_img.get_bounding_rect()
+                    # Create collision rect at the key's position with the bounding rect size
+                    key_rect = pygame.Rect(
+                        key_tile['pos'][0] + bounding_rect.x,
+                        key_tile['pos'][1] + bounding_rect.y,
+                        bounding_rect.width,
+                        bounding_rect.height
+                    )
+                    if player_rect.colliderect(key_rect):
+                        self.has_key = True
+                        self.keys.remove(key_tile)
+                        # Also remove from tilemap
+                        if key_tile in self.tilemap.offgrid_tiles:
+                            self.tilemap.offgrid_tiles.remove(key_tile)
+            
+            # Check door unlocking
+            if not self.dead and not self.transition_active:
+                player_rect = self.player.rect()
+                for door_tile in self.doors[:]:  # Use slice to iterate over copy
+                    door_img = self.assets['door'][0]
+                    # Get tight bounding rect around non-transparent pixels
+                    bounding_rect = door_img.get_bounding_rect()
+                    # Create collision rect at the door's position with the bounding rect size
+                    door_rect = pygame.Rect(
+                        door_tile['pos'][0] + bounding_rect.x,
+                        door_tile['pos'][1] + bounding_rect.y,
+                        bounding_rect.width,
+                        bounding_rect.height
+                    )
+                    if player_rect.colliderect(door_rect) and self.has_key:
+                        # Unlock door (remove it) and trigger win condition
+                        self.doors.remove(door_tile)
+                        # Also remove from tilemap
+                        if door_tile in self.tilemap.offgrid_tiles:
+                            self.tilemap.offgrid_tiles.remove(door_tile)
+                        self.has_key = False  # Key is consumed
+                        self.won = True  # Trigger win condition
+            
             # Buttons
             for button in self.buttons:
                 button_rect = pygame.Rect(button['pos'][0] - render_scroll[0], 
@@ -535,11 +592,56 @@ class Game:
                         self.load_level(self.level)
                         self.dead = 0
                     elif self.transition_type == 'win':
+                        # Load levelselect.json map instead of next level
                         game_dir = os.path.dirname(os.path.abspath(__file__))
-                        maps_dir = os.path.join(game_dir, 'data', 'maps')
-                        max_level = len([f for f in os.listdir(maps_dir) if f.endswith('.json')]) - 1
-                        self.level = min(self.level + 1, max_level)
-                        self.load_level(self.level)
+                        levelselect_path = os.path.join(game_dir, 'data', 'maps', 'levelselect.json')
+                        self.tilemap.load(levelselect_path)
+                        
+                        # Reset portals
+                        self.player_portal.unlock()
+                        self.cursor_portal.unlock()
+                        
+                        # Reset game elements
+                        self.crates = []
+                        self.buttons = []
+                        self.springs = []
+                        self.lasers = []
+                        self.exit_door = None
+                        self.exit_open = False
+                        self.keys = []
+                        self.doors = []
+                        self.has_key = False
+                        
+                        # Extract spawners from levelselect
+                        for spawner in self.tilemap.extract([('spawners', 0), ('spawners', 1), ('spawners', 2), 
+                                                             ('spawners', 3), ('spawners', 6), ('spawners', 7)]):
+                            variant = spawner['variant']
+                            pos = spawner['pos']
+                            
+                            if variant == 0:  # Player spawn
+                                self.player.pos = pos
+                                self.player.air_time = 0
+                                self.player.velocity = [0, 0]
+                            elif variant == 1:  # Crate spawn
+                                self.crates.append(Crate(self, pos))
+                            elif variant == 2:  # Button
+                                self.buttons.append({'pos': pos, 'size': (16, 8), 'pressed': False})
+                            elif variant == 3:  # Spring (bottom attached, launches upward)
+                                self.springs.append(Spring(self, pos))
+                            elif variant == 6:  # Laser
+                                self.lasers.append({'pos': pos, 'size': (16, 240), 'active': True})
+                            elif variant == 7:  # Exit door
+                                self.exit_door = {'pos': pos, 'size': (16, 32)}
+                        
+                        # Extract keys and doors from offgrid tiles
+                        for tile in self.tilemap.offgrid_tiles:
+                            if tile['type'] == 'key':
+                                self.keys.append(tile)
+                            elif tile['type'] == 'door':
+                                self.doors.append(tile)
+                        
+                        self.scroll = [0, 0]
+                        self.dead = 0
                         self.won = False
                     self.transition_type = None
             
