@@ -184,14 +184,16 @@ class Portal:
                 entity.velocity[0] = old_velocity[0] if old_velocity[0] < 0 else -abs(old_velocity[0])
                 entity.velocity[1] = old_velocity[1]  # Keep vertical velocity
             elif exit_edge == 'right':  # Exiting right edge, enter from left edge (inside, near left)
+                # Position entity at the inside left edge of the exit portal
+                # The entity's left edge starts at the left inside edge of the portal
                 entity.pos[0] = exit_rect.left + offset
                 # Use relative_position to place entity at same position along the vertical edge
                 entity.pos[1] = exit_rect.top + (relative_position * exit_rect.height) - entity.size[1] // 2
                 # Clamp to ensure entity stays within portal bounds
                 entity.pos[1] = max(exit_rect.top, min(exit_rect.bottom - entity.size[1], entity.pos[1]))
-                # Entering from left (moving right), exit going right (preserve rightward motion)
-                # If was moving right (positive), keep moving right
-                entity.velocity[0] = old_velocity[0] if old_velocity[0] > 0 else abs(old_velocity[0])
+                # Entering from left (moving right), exit going right (moving from left to right)
+                # Ensure positive horizontal velocity (moving right from left edge)
+                entity.velocity[0] = abs(old_velocity[0]) if old_velocity[0] != 0 else (abs(old_velocity[1]) if old_velocity[1] != 0 else 2.0)
                 entity.velocity[1] = old_velocity[1]  # Keep vertical velocity
             elif exit_edge == 'top':  # Exiting top edge, enter from bottom edge (inside, near bottom)
                 # Use relative_position to place entity at same position along the horizontal edge
