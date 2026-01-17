@@ -2,7 +2,8 @@ import pygame
 import math
 
 class Portal:
-    def __init__(self, size=64):
+    def __init__(self, game, size=64):
+        self.game = game
         self.size = size
         self.pos = [0, 0]
         self.locked = False
@@ -10,6 +11,18 @@ class Portal:
         self.locked_pos = [0, 0]
         self.color = (200, 200, 200)  # Default gray
         self.thickness = 2
+        
+        # Portal animations
+        if hasattr(game, 'assets'):
+            self.blue_animation = game.assets.get('portal/blue', None)
+            self.orange_animation = game.assets.get('portal/orange', None)
+            if self.blue_animation:
+                self.blue_animation = self.blue_animation.copy()
+            if self.orange_animation:
+                self.orange_animation = self.orange_animation.copy()
+        else:
+            self.blue_animation = None
+            self.orange_animation = None
         
     def update(self, follow_pos):
         if not self.locked:
@@ -19,6 +32,12 @@ class Portal:
         else:
             # Keep locked position
             self.pos = self.locked_pos.copy()
+        
+        # Update animations
+        if self.blue_animation:
+            self.blue_animation.update()
+        if self.orange_animation:
+            self.orange_animation.update()
     
     def lock(self, lock_type):
         self.locked = True
@@ -273,5 +292,25 @@ class Portal:
         x = self.pos[0] - offset[0]
         y = self.pos[1] - offset[1]
         
-        # Draw portal square
-        pygame.draw.rect(surf, self.color, (x, y, self.size, self.size), self.thickness)
+        # Render portal sprite based on lock type
+        if self.locked and self.lock_type:
+            if self.lock_type == 'left' and self.blue_animation:
+                # Blue portal for left click
+                portal_img = self.blue_animation.img()
+                # Scale image to portal size if needed
+                if portal_img.get_width() != self.size or portal_img.get_height() != self.size:
+                    portal_img = pygame.transform.scale(portal_img, (self.size, self.size))
+                surf.blit(portal_img, (x, y))
+            elif self.lock_type == 'right' and self.orange_animation:
+                # Orange portal for right click
+                portal_img = self.orange_animation.img()
+                # Scale image to portal size if needed
+                if portal_img.get_width() != self.size or portal_img.get_height() != self.size:
+                    portal_img = pygame.transform.scale(portal_img, (self.size, self.size))
+                surf.blit(portal_img, (x, y))
+            else:
+                # Fallback to old rectangle drawing if sprites not available
+                pygame.draw.rect(surf, self.color, (x, y, self.size, self.size), self.thickness)
+        else:
+            # Unlocked portal - draw gray outline
+            pygame.draw.rect(surf, self.color, (x, y, self.size, self.size), self.thickness)

@@ -107,4 +107,29 @@ class Tilemap:
                 loc = str(x) + ';' + str(y)
                 if loc in self.tilemap:
                     tile = self.tilemap[loc]
-                    surf.blit(self.game.assets[tile['type']][tile['variant']], (tile['pos'][0] * self.tile_size - offset[0], tile['pos'][1] * self.tile_size - offset[1]))
+                    if tile['type'] == 'spikes':
+                        # Render spikes with rotation and positioning
+                        spike_img = self.game.assets['spikes'][0].copy()
+                        rotation = tile.get('rotation', 0)
+                        if rotation != 0:
+                            spike_img = pygame.transform.rotate(spike_img, -rotation)  # Negative for clockwise
+                        
+                        # Position spike in the appropriate half of the tile based on rotation
+                        # Spikes fill full width (16) and half height (8)
+                        tile_x = tile['pos'][0] * self.tile_size - offset[0]
+                        tile_y = tile['pos'][1] * self.tile_size - offset[1]
+                        
+                        if rotation == 0:  # Pointing up (bottom half, full width)
+                            spike_pos = (tile_x, tile_y + 8)
+                        elif rotation == 90:  # Pointing right (left half, full height when rotated)
+                            spike_pos = (tile_x, tile_y)
+                        elif rotation == 180:  # Pointing down (top half, full width)
+                            spike_pos = (tile_x, tile_y)
+                        elif rotation == 270:  # Pointing left (right half, full height when rotated)
+                            spike_pos = (tile_x + 8, tile_y)
+                        else:
+                            spike_pos = (tile_x, tile_y + 8)  # Default bottom half
+                        
+                        surf.blit(spike_img, spike_pos)
+                    else:
+                        surf.blit(self.game.assets[tile['type']][tile['variant']], (tile['pos'][0] * self.tile_size - offset[0], tile['pos'][1] * self.tile_size - offset[1]))
