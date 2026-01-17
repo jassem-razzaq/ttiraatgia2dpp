@@ -37,6 +37,10 @@ class Game:
         spikes_large_img = load_image('spikes.png')
         spikes_img = pygame.transform.scale(spikes_large_img, (16, 8))
         
+        # Load spring_horizontal image for horizontal launcher tile
+        game_dir = os.path.dirname(os.path.abspath(__file__))
+        spring_horizontal_img = pygame.image.load(os.path.join(game_dir, 'data', 'images', 'spring_horizontal.png')).convert_alpha()
+        
         # Load portal sprites
         portal_blue_images = load_images('portal_blue')
         portal_orange_images = load_images('portal_orange')
@@ -48,6 +52,7 @@ class Game:
             'stone': load_images('tiles/stone'),
             'noportalzone': [noportalzone_img],  # Single-item list for consistency
             'spikes': [spikes_img],  # Single-item list, half tile size
+            'spring_horizontal': [spring_horizontal_img],  # Horizontal spring launcher tile
             'portal/blue': Animation(portal_blue_images, img_dur=5),
             'portal/orange': Animation(portal_orange_images, img_dur=5),
             'player/idle': Animation(load_images('entities/player/idle'), img_dur=6),
@@ -438,6 +443,45 @@ class Game:
                                 levelselect_path = os.path.join(game_dir, 'data', 'maps', 'levelselect.json')
                                 self.load_level(levelselect_path)
                                 break
+
+            # Check spring_horizontal (horizontal launcher) collisions
+            if not self.dead and not self.transition_active:
+                player_rect = self.player.rect()
+                # Check all spring_horizontal tiles (also handle old red_box tiles for backwards compatibility)
+                for loc in self.tilemap.tilemap:
+                    tile = self.tilemap.tilemap[loc]
+                    if tile['type'] == 'spring_horizontal' or tile['type'] == 'red_box':
+                        # Convert old red_box to spring_horizontal
+                        if tile['type'] == 'red_box':
+                            tile['type'] = 'spring_horizontal'
+                        tile_x = tile['pos'][0] * self.tilemap.tile_size
+                        tile_y = tile['pos'][1] * self.tilemap.tile_size
+                        spring_horizontal_rect = pygame.Rect(tile_x, tile_y, self.tilemap.tile_size, self.tilemap.tile_size)
+                        
+                        if player_rect.colliderect(spring_horizontal_rect):
+                            # Determine launch direction based on which side the player is on
+                            player_center_x = player_rect.centerx
+                            player_center_y = player_rect.centery
+                            spring_center_x = spring_horizontal_rect.centerx
+                            spring_center_y = spring_horizontal_rect.centery
+                            
+                            # Calculate horizontal and vertical distances
+                            dx = player_center_x - spring_center_x
+                            dy = player_center_y - spring_center_y
+                            
+                            # Launch horizontally based on which side player is on
+                            # Use larger horizontal velocity if player is more to the side
+                            launch_power = 5.0  # Base launch power
+                            if abs(dx) > abs(dy):  # Player is more to the side
+                                if dx > 0:  # Player is to the right, launch right
+                                    self.player.velocity[0] = launch_power
+                                else:  # Player is to the left, launch left
+                                    self.player.velocity[0] = -launch_power
+                            else:  # Player is more above/below, launch based on horizontal position
+                                if dx > 0:  # Player is to the right, launch right
+                                    self.player.velocity[0] = launch_power
+                                else:  # Player is to the left, launch left
+                                    self.player.velocity[0] = -launch_power
             
             # Camera is static (no player tracking)
             render_scroll = (int(self.scroll[0]), int(self.scroll[1]))
