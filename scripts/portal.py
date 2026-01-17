@@ -157,7 +157,7 @@ class Portal:
         - Exit from right edge → Enter from bottom edge (inside, near bottom edge)
         - Exit from bottom edge → Enter from right edge (inside, near right edge)
         - Exit from left edge → Enter from top edge (inside, near top edge)
-        - Exit from top edge → Enter from left edge (inside, near left edge)
+        - Exit from top edge → Enter from left edge (inside, near left edge) - launches rightward
         """
         if not self.locked or not exit_portal.locked:
             return False
@@ -259,20 +259,21 @@ class Portal:
                     horizontal_speed = abs(old_velocity[1]) if abs(old_velocity[1]) > 0 else 2.0
                 entity.velocity[0] = 0
                 entity.velocity[1] = horizontal_speed  # Downward (positive Y) - launch downward with conserved momentum
-            elif exit_edge == 'top':  # Exiting top edge (entering from top), exit from top edge going downward
-                # Use relative_position to place entity at same position along the horizontal edge
-                entity.pos[0] = exit_rect.left + (relative_position * exit_rect.width) - entity.size[0] // 2
+            elif exit_edge == 'top':  # Exiting top edge (entering from top), exit from left edge going right
+                entity.pos[0] = exit_rect.left + offset
+                # Use relative_position to place entity at same position along the vertical edge
+                # relative_position is along the top edge (horizontal), so we use it for vertical position
+                entity.pos[1] = exit_rect.top + (relative_position * exit_rect.height) - entity.size[1] // 2
                 # Clamp to ensure entity stays within portal bounds
-                entity.pos[0] = max(exit_rect.left, min(exit_rect.right - entity.size[0], entity.pos[0]))
-                entity.pos[1] = exit_rect.top + offset
-                # Entering from top (moving up), exit going DOWN from top edge
-                # Take vertical up velocity magnitude, convert to vertical DOWN velocity (preserve momentum)
+                entity.pos[1] = max(exit_rect.top, min(exit_rect.bottom - entity.size[1], entity.pos[1]))
+                # Entering from top (moving up), exit going RIGHT from left edge
+                # Take vertical up velocity magnitude, convert to horizontal RIGHT velocity (preserve momentum)
                 vertical_speed = abs(old_velocity[1])
                 # If no vertical velocity, use horizontal velocity or minimum
                 if vertical_speed == 0:
                     vertical_speed = abs(old_velocity[0]) if abs(old_velocity[0]) > 0 else 2.0
-                entity.velocity[0] = 0
-                entity.velocity[1] = vertical_speed  # Downward (positive Y) - launch downward with conserved momentum
+                entity.velocity[0] = vertical_speed  # Rightward (positive X) - launch right with conserved momentum
+                entity.velocity[1] = 0
         
         # After teleportation, update last_pos to be outside the exit portal
         # This prevents immediate re-teleportation detection
@@ -293,8 +294,8 @@ class Portal:
                 entity.last_pos[0] = exit_rect.right + 1
             elif exit_edge == 'left':  # Entered from left, exits from top going down
                 entity.last_pos[1] = exit_rect.top - entity.size[1] - 1
-            elif exit_edge == 'top':  # Entered from top, exits from top going down
-                entity.last_pos[1] = exit_rect.top - entity.size[1] - 1
+            elif exit_edge == 'top':  # Entered from top, exits from left going right
+                entity.last_pos[0] = exit_rect.left - entity.size[0] - 1
         
         return True
     

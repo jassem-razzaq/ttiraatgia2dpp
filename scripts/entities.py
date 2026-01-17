@@ -208,6 +208,10 @@ class Crate(PhysicsEntity):
     def update(self, tilemap, movement=(0, 0)):
         super().update(tilemap, movement=movement)
         
+        # If crate collided with a wall horizontally, stop horizontal movement immediately
+        if self.collisions['left'] or self.collisions['right']:
+            self.velocity[0] = 0
+        
         # Crates have friction (gravity is handled by PhysicsEntity parent class)
         if self.velocity[0] > 0:
             self.velocity[0] = max(self.velocity[0] - 0.15, 0)

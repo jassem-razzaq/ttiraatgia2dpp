@@ -519,14 +519,37 @@ class Game:
                         player_horizontal_movement = (self.movement[1] - self.movement[0])
                         
                         # Simple pushing: if player is moving left/right and colliding, move crate directly
+                        # But first check if the crate would collide with a wall
                         if player_horizontal_movement > 0:  # Player moving right
                             # Check if player is on the left side of crate
                             if player_rect.centerx < crate_rect.centerx:
-                                crate.pos[0] += abs(player_horizontal_movement) * 2  # Move crate right
+                                # Check if moving right would cause a wall collision
+                                test_pos = crate.pos[0] + abs(player_horizontal_movement) * 2
+                                test_rect = pygame.Rect(test_pos, crate.pos[1], crate.size[0], crate.size[1])
+                                wall_collision = False
+                                for rect in self.tilemap.physics_rects_around((test_pos, crate.pos[1])):
+                                    if test_rect.colliderect(rect):
+                                        wall_collision = True
+                                        break
+                                if not wall_collision:
+                                    crate.pos[0] += abs(player_horizontal_movement) * 2  # Move crate right
+                                else:
+                                    crate.velocity[0] = 0  # Stop crate if it would hit a wall
                         elif player_horizontal_movement < 0:  # Player moving left
                             # Check if player is on the right side of crate
                             if player_rect.centerx > crate_rect.centerx:
-                                crate.pos[0] -= abs(player_horizontal_movement) * 2  # Move crate left
+                                # Check if moving left would cause a wall collision
+                                test_pos = crate.pos[0] - abs(player_horizontal_movement) * 2
+                                test_rect = pygame.Rect(test_pos, crate.pos[1], crate.size[0], crate.size[1])
+                                wall_collision = False
+                                for rect in self.tilemap.physics_rects_around((test_pos, crate.pos[1])):
+                                    if test_rect.colliderect(rect):
+                                        wall_collision = True
+                                        break
+                                if not wall_collision:
+                                    crate.pos[0] -= abs(player_horizontal_movement) * 2  # Move crate left
+                                else:
+                                    crate.velocity[0] = 0  # Stop crate if it would hit a wall
                 
                 # Update crate with gravity (but no movement input)
                 if not crate.teleported_this_frame:
