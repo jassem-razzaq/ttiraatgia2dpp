@@ -24,6 +24,12 @@ class Editor:
         noportalzone_large_img.set_alpha(128)  # Make it semi-transparent
         noportalzone_img = pygame.transform.scale(noportalzone_large_img, (16, 16))
         
+        door_large_img = load_image('tiles/door.png')
+        door = pygame.transform.scale(door_large_img, (48, 48))
+
+        key_large_img = load_image('tiles/key.png')
+        key = pygame.transform.scale(key_large_img, (48, 48))
+
         self.assets = {
             'decor': load_images('tiles/decor'),
             'grass': load_images('tiles/grass'),
@@ -33,6 +39,8 @@ class Editor:
             'spawners': load_images('tiles/spawners'),
             'box': [load_image('entities/box.png')],  # Box as a single-item list for consistency
             'spring': [load_image('spring.png', (255, 255, 255))],  # Spring with white colorkey
+            'door': [door],
+            'key': [key],
         }
         
         self.movement = [False, False, False, False]
