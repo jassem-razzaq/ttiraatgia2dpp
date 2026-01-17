@@ -30,6 +30,10 @@ class Game:
         spikes_large_img = load_image('spikes.png')
         spikes_img = pygame.transform.scale(spikes_large_img, (16, 8))
         
+        # Load portal sprites
+        portal_blue_images = load_images('portal_blue')
+        portal_orange_images = load_images('portal_orange')
+        
         self.assets = {
             'decor': load_images('tiles/decor'),
             'grass': load_images('tiles/grass'),
@@ -37,6 +41,8 @@ class Game:
             'stone': load_images('tiles/stone'),
             'noportalzone': [noportalzone_img],  # Single-item list for consistency
             'spikes': [spikes_img],  # Single-item list, half tile size
+            'portal/blue': Animation(portal_blue_images, img_dur=5),
+            'portal/orange': Animation(portal_orange_images, img_dur=5),
             'player/idle': Animation(load_images('entities/player/idle'), img_dur=6),
             'player/run': Animation(load_images('entities/player/run'), img_dur=4),
             'player/jump': Animation(load_images('entities/player/jump')),
@@ -50,8 +56,8 @@ class Game:
         self.tilemap = Tilemap(self, tile_size=16)
         
         # Portal system
-        self.player_portal = Portal(size=64)
-        self.cursor_portal = Portal(size=64)
+        self.player_portal = Portal(self, size=64)
+        self.cursor_portal = Portal(self, size=64)
         self.mouse_pos = [0, 0]
         
         # Game elements
