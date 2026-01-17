@@ -8,6 +8,7 @@ from scripts.entities import PhysicsEntity, Player, Crate, Spring
 from scripts.tilemap import Tilemap, PHYSICS_TILES
 from scripts.portal import Portal
 
+
 class Game:
     def __init__(self):
         pygame.init()
@@ -18,14 +19,13 @@ class Game:
         self.display_2 = pygame.Surface((540, 380))
 
         self.clock = pygame.time.Clock()
-        
+
         self.movement = [False, False]
-        
+
         # Load noportalzone image and make it transparent
         noportalzone_large_img = load_image('tiles/noportalzone.png')
         noportalzone_large_img.set_alpha(128)  # Make it semi-transparent
         noportalzone_img = pygame.transform.scale(noportalzone_large_img, (16, 16))
-    
 
         door = load_image('tiles/door.png')
 
@@ -35,15 +35,15 @@ class Game:
         # Load spikes image and scale to full width, half height (16x8 for 16x16 tile)
         spikes_large_img = load_image('spikes.png')
         spikes_img = pygame.transform.scale(spikes_large_img, (16, 8))
-        
+
         # Load spring_horizontal image for horizontal launcher tile
         game_dir = os.path.dirname(os.path.abspath(__file__))
         spring_horizontal_img = pygame.image.load(os.path.join(game_dir, 'data', 'images', 'spring_horizontal.png')).convert_alpha()
-        
+
         # Load portal sprites
         portal_red_images = load_images('portal_red')
         portal_white_images = load_images('portal_white')
-        
+
         self.assets = {
             'decor': load_images('tiles/decor'),
             'grass': load_images('tiles/grass'),
@@ -63,18 +63,18 @@ class Game:
             'door': [door],
             'key': [key],
         }
-        
+
         self.player = Player(self, (50, 50), (8, 15))
-        
+
         self.tilemap = Tilemap(self, tile_size=16)
-        
+
         # Portal system
         self.player_portal = Portal(self, size=64)
         self.cursor_portal = Portal(self, size=64)
         self.mouse_pos = [0, 0]
         self.portal_mode = False  # Track if shift is held (portal mode active)
         self.current_portal_color = None  # 'red' or 'white' when locked
-        
+
         # Game elements
         self.crates = []
         self.buttons = []
@@ -84,24 +84,24 @@ class Game:
         self.keys = []  # List of key positions (offgrid tiles)
         self.doors = []  # List of door positions (offgrid tiles)
         self.has_key = False  # Track if player has collected a key
-        
+
         # Key system
         self.has_key = False  # Whether player has collected the key
         self.room_has_key = False  # Whether the current room has a key
-        
+
         self.level = 0
         self.load_level(self.level)
-        
+
         self.scroll = [0, 0]
         self.dead = 0
         self.won = False
-        
+
         # Transition system
         self.transition_active = False
         self.transition_type = None  # 'death' or 'win'
         self.transition_progress = 0  # 0 to 1
         self.transition_duration = 60  # frames for fade in + out
-        
+
     def load_level(self, map_id_or_path):
         # Get the game directory
         game_dir = os.path.dirname(os.path.abspath(__file__))
@@ -114,15 +114,15 @@ class Game:
         else:
             # It's already a path
             map_path = map_id_or_path
-        
+
         self.tilemap.load(map_path)
-        
+
         # Reset portals
         self.player_portal.unlock()
         self.cursor_portal.unlock()
         self.portal_mode = False
         self.current_portal_color = None
-        
+
         # Extract spawners
         self.crates = []
         self.buttons = []
@@ -132,29 +132,29 @@ class Game:
         self.keys = []  # List of key positions (offgrid tiles)
         self.doors = []  # List of door positions (offgrid tiles)
         self.has_key = False  # Reset key collection status
-        
+
         # Reset key system
         self.has_key = False
         self.room_has_key = False
-        
+
         # Check if room has a key (in tilemap or offgrid)
         for loc in self.tilemap.tilemap:
             tile = self.tilemap.tilemap[loc]
             if tile['type'] == 'key':
                 self.room_has_key = True
                 break
-        
+
         if not self.room_has_key:
             for tile in self.tilemap.offgrid_tiles:
                 if tile['type'] == 'key':
                     self.room_has_key = True
                     break
-        
+
         for spawner in self.tilemap.extract([('spawners', 0), ('spawners', 1), ('spawners', 2), 
                                              ('spawners', 3), ('spawners', 6), ('spawners', 7)]):
             variant = spawner['variant']
             pos = spawner['pos']
-            
+
             if variant == 0:  # Player spawn
                 self.player.pos = pos
                 self.player.air_time = 0
@@ -167,7 +167,7 @@ class Game:
                 self.springs.append(Spring(self, pos))
             elif variant == 7:  # Exit door
                 self.exit_door = {'pos': pos, 'size': (16, 32)}
-        
+
         # Extract keys and doors from offgrid tiles
         # Note: Keys and doors are stored in offgrid_tiles with their centered positions
         for tile in self.tilemap.offgrid_tiles:
@@ -175,11 +175,11 @@ class Game:
                 self.keys.append(tile)  # Store the tile directly
             elif tile['type'] == 'door':
                 self.doors.append(tile)  # Store the tile directly
-        
+
         self.scroll = [0, 0]
         self.dead = 0
         self.won = False
-    
+
     def is_in_noportalzone(self, pos):
         """Check if a position is over a noportalzone tile"""
         tile_loc = str(int(pos[0] // self.tilemap.tile_size)) + ';' + str(int(pos[1] // self.tilemap.tile_size))
@@ -187,7 +187,7 @@ class Game:
             if self.tilemap.tilemap[tile_loc]['type'] == 'noportalzone':
                 return True
         return False
-    
+
     def portal_overlaps_noportalzone(self, portal_rect):
         """Check if any part of a portal rectangle overlaps with any noportalzone tile"""
         # Get the tile coordinates that the portal rectangle covers
@@ -195,7 +195,7 @@ class Game:
         max_tile_x = int(portal_rect.right // self.tilemap.tile_size)
         min_tile_y = int(portal_rect.top // self.tilemap.tile_size)
         max_tile_y = int(portal_rect.bottom // self.tilemap.tile_size)
-        
+
         # Check all tiles that the portal rectangle could overlap with
         for tile_x in range(min_tile_x, max_tile_x + 1):
             for tile_y in range(min_tile_y, max_tile_y + 1):
@@ -212,7 +212,7 @@ class Game:
                         if portal_rect.colliderect(tile_rect):
                             return True
         return False
-    
+
     def portal_fully_encompassed_by_solid(self, portal_rect):
         """Check if the portal is fully encompassed by grass or stone tiles"""
         # Get the tile coordinates that the portal rectangle covers
@@ -220,7 +220,7 @@ class Game:
         max_tile_x = int(portal_rect.right // self.tilemap.tile_size)
         min_tile_y = int(portal_rect.top // self.tilemap.tile_size)
         max_tile_y = int(portal_rect.bottom // self.tilemap.tile_size)
-        
+
         # Check all tiles that the portal rectangle overlaps with
         for tile_x in range(min_tile_x, max_tile_x + 1):
             for tile_y in range(min_tile_y, max_tile_y + 1):
@@ -231,7 +231,7 @@ class Game:
                     self.tilemap.tile_size,
                     self.tilemap.tile_size
                 )
-                
+
                 # Check if this tile overlaps with the portal
                 if portal_rect.colliderect(tile_rect):
                     # If the tile exists and is not grass or stone, portal is not fully encompassed
@@ -242,18 +242,18 @@ class Game:
                     else:
                         # If tile doesn't exist (empty space), portal is not fully encompassed
                         return False
-        
+
         # If we get here, all overlapping tiles are grass or stone
         return True
-    
+
     def check_portal_teleport(self, entity):
         """Check if entity should be teleported through portals"""
         if not hasattr(entity, 'last_pos'):
             entity.last_pos = entity.pos.copy()
-        
+
         entity_rect = entity.rect()
         last_rect = pygame.Rect(entity.last_pos[0], entity.last_pos[1], entity.size[0], entity.size[1])
-        
+
         # Check player portal
         if self.player_portal.locked and self.cursor_portal.locked:
             collision_result = self.player_portal.check_collision(entity_rect, last_rect)
@@ -262,7 +262,7 @@ class Game:
                 if self.player_portal.teleport_entity(entity, self.cursor_portal, edge, relative_position):
                     # last_pos is updated inside teleport_entity to prevent immediate re-teleport
                     return True
-            
+
             # Check cursor portal
             collision_result = self.cursor_portal.check_collision(entity_rect, last_rect)
             if collision_result:
@@ -270,10 +270,10 @@ class Game:
                 if self.cursor_portal.teleport_entity(entity, self.player_portal, edge, relative_position):
                     # last_pos is updated inside teleport_entity to prevent immediate re-teleport
                     return True
-        
+
         entity.last_pos = entity.pos.copy()
         return False
-    
+
     def run(self):
         try:
             game_dir = os.path.dirname(os.path.abspath(__file__))
@@ -284,50 +284,50 @@ class Game:
                 pygame.mixer.music.play(-1)
         except:
             pass  # Music file might not exist
-        
+
         while True:
             self.display.fill((0, 0, 0, 0))
             self.display_2.blit(self.assets['background'], (0, 0))
-            
+
             # Update mouse position (scaled to display size)
             mouse_x, mouse_y = pygame.mouse.get_pos()
             self.mouse_pos[0] = (mouse_x / self.screen.get_width()) * self.display.get_width() + self.scroll[0]
             self.mouse_pos[1] = (mouse_y / self.screen.get_height()) * self.display.get_height() + self.scroll[1]
-            
+
             # Update portals
             self.player_portal.update(self.player.rect().center)
             self.cursor_portal.update(self.mouse_pos)
-            
+
             # Check if cursor or cursor portal overlaps with any noportalzone tile
             cursor_in_noportalzone = self.is_in_noportalzone(self.mouse_pos)
             cursor_portal_rect = self.cursor_portal.get_rect()
             cursor_portal_in_noportalzone = self.portal_overlaps_noportalzone(cursor_portal_rect)
             cursor_portal_encompassed_by_solid = self.portal_fully_encompassed_by_solid(cursor_portal_rect)
             portal_placement_blocked = cursor_in_noportalzone or cursor_portal_in_noportalzone or cursor_portal_encompassed_by_solid
-            
+
             # Check button presses
             for button in self.buttons:
                 button['pressed'] = False
                 button_rect = pygame.Rect(button['pos'][0], button['pos'][1], button['size'][0], button['size'][1])
-                
+
                 # Check player
                 if button_rect.colliderect(self.player.rect()):
                     button['pressed'] = True
-            
+
             # Check if all buttons are pressed (open exit)
             self.exit_open = all(button['pressed'] for button in self.buttons) if self.buttons else False
-            
+
             # Update springs (check for pushing before updating)
             for spring in self.springs:
                 # Check if player is pushing the spring horizontally
                 if not self.dead:
                     player_rect = self.player.rect()
                     spring_rect = spring.rect()
-                    
+
                     # Check if player is colliding with spring and moving horizontally
                     if player_rect.colliderect(spring_rect):
                         player_horizontal_movement = (self.movement[1] - self.movement[0])
-                        
+
                         # Simple pushing: if player is moving left/right and colliding, move spring directly
                         if player_horizontal_movement > 0:  # Player moving right
                             # Check if player is on the left side of spring
@@ -337,7 +337,7 @@ class Game:
                             # Check if player is on the right side of spring
                             if player_rect.centerx > spring_rect.centerx:
                                 spring.pos[0] -= abs(player_horizontal_movement) * 2  # Move spring left
-                
+
                 # Update spring with physics and collision detection
                 entities_to_check = [self.player] + self.crates
                 if not spring.teleported_this_frame:
@@ -353,7 +353,7 @@ class Game:
                 # Player falls off if they go below the display height (with some margin)
                 if self.player.pos[1] > self.display.get_height() + 100:
                     self.dead = 1
-            
+
             # Check spike collisions
             if not self.dead and not self.transition_active:
                 player_rect = self.player.rect()
@@ -365,7 +365,7 @@ class Game:
                         tile_y = tile['pos'][1] * self.tilemap.tile_size
                         # Get rotation angle (default 0 if not set)
                         rotation = tile.get('rotation', 0)
-                        
+
                         # Calculate spike hitbox based on rotation
                         # Spikes fill full width (16) and half height (8)
                         spike_width = 16  # Full tile width
@@ -381,11 +381,11 @@ class Game:
                         else:
                             # Default to bottom half
                             spike_rect = pygame.Rect(tile_x, tile_y + 8, spike_width, spike_height)
-                        
+
                         if player_rect.colliderect(spike_rect):
                             self.dead = 1
                             break
-            
+
             # Check key collection
             if not self.dead and not self.transition_active and not self.has_key:
                 player_rect = self.player.rect()
@@ -403,7 +403,7 @@ class Game:
                             # Remove key from tilemap
                             del self.tilemap.tilemap[loc]
                             break
-                
+
                 # Check key tiles in offgrid_tiles
                 if not self.has_key:
                     for tile in self.tilemap.offgrid_tiles[:]:  # Use slice copy to safely remove during iteration
@@ -415,13 +415,13 @@ class Game:
                                 # Remove key from offgrid_tiles
                                 self.tilemap.offgrid_tiles.remove(tile)
                                 break
-            
+
             # Check door collisions
             if not self.dead and not self.transition_active:
                 player_rect = self.player.rect()
                 # Check if door can be used (no key required OR key collected)
                 can_use_door = not self.room_has_key or self.has_key
-                
+
                 if can_use_door:
                     door_img = self.assets['door'][0]
                     # Get tight bounding rect around non-transparent pixels
@@ -449,7 +449,7 @@ class Game:
                                 levelselect_path = os.path.join(game_dir, 'data', 'maps', 'levelselect.json')
                                 self.load_level(levelselect_path)
                                 break
-                    
+
                     # Check door tiles in offgrid_tiles
                     for tile in self.tilemap.offgrid_tiles:
                         if tile['type'] == 'door':
@@ -480,18 +480,18 @@ class Game:
                         tile_x = tile['pos'][0] * self.tilemap.tile_size
                         tile_y = tile['pos'][1] * self.tilemap.tile_size
                         spring_horizontal_rect = pygame.Rect(tile_x, tile_y, self.tilemap.tile_size, self.tilemap.tile_size)
-                        
+
                         if player_rect.colliderect(spring_horizontal_rect):
                             # Determine launch direction based on which side the player is on
                             player_center_x = player_rect.centerx
                             player_center_y = player_rect.centery
                             spring_center_x = spring_horizontal_rect.centerx
                             spring_center_y = spring_horizontal_rect.centery
-                            
+
                             # Calculate horizontal and vertical distances
                             dx = player_center_x - spring_center_x
                             dy = player_center_y - spring_center_y
-                            
+
                             # Launch horizontally based on which side player is on
                             # Use larger horizontal velocity if player is more to the side
                             launch_power = 6.5  # Base launch power
@@ -505,24 +505,24 @@ class Game:
                                     self.player.velocity[0] = launch_power
                                 else:  # Player is to the left, launch left
                                     self.player.velocity[0] = -launch_power
-            
+
             # Camera is static (no player tracking)
             render_scroll = (int(self.scroll[0]), int(self.scroll[1]))
-            
+
             # Render tilemap
             self.tilemap.render(self.display, offset=render_scroll)
-            
+
             # Update crates (check for pushing before updating)
             for crate in self.crates:
                 # Check if player is pushing the crate
                 if not self.dead:
                     player_rect = self.player.rect()
                     crate_rect = crate.rect()
-                    
+
                     # Check if player is colliding with crate and moving horizontally
                     if player_rect.colliderect(crate_rect):
                         player_horizontal_movement = (self.movement[1] - self.movement[0])
-                        
+
                         # Simple pushing: if player is moving left/right and colliding, move crate directly
                         # But first check if the crate would collide with a wall
                         if player_horizontal_movement > 0:  # Player moving right
@@ -555,7 +555,7 @@ class Game:
                                     crate.pos[0] -= abs(player_horizontal_movement) * 2  # Move crate left
                                 else:
                                     crate.velocity[0] = 0  # Stop crate if it would hit a wall
-                
+
                 # Update crate with gravity (but no movement input)
                 if not crate.teleported_this_frame:
                     crate.update(self.tilemap, movement=(0, 0))
@@ -564,7 +564,7 @@ class Game:
                         crate.teleported_this_frame = True
                 else:
                     crate.teleported_this_frame = False
-            
+
             # Update player (with crates as colliders for collision detection)
             if not self.dead:
                 if not self.player.teleported_this_frame:
@@ -574,15 +574,15 @@ class Game:
                         self.player.teleported_this_frame = True
                 else:
                     self.player.teleported_this_frame = False
-            
+
             # Render crates
             for crate in self.crates:
                 crate.render(self.display, offset=render_scroll)
-            
+
             # Render player
             if not self.dead:
                 self.player.render(self.display, offset=render_scroll)
-            
+
             # Check key collection
             if not self.dead and not self.transition_active:
                 player_rect = self.player.rect()
@@ -603,7 +603,7 @@ class Game:
                         # Also remove from tilemap
                         if key_tile in self.tilemap.offgrid_tiles:
                             self.tilemap.offgrid_tiles.remove(key_tile)
-            
+
             # Check door unlocking
             if not self.dead and not self.transition_active:
                 player_rect = self.player.rect()
@@ -626,7 +626,7 @@ class Game:
                             self.tilemap.offgrid_tiles.remove(door_tile)
                         self.has_key = False  # Key is consumed
                         self.won = True  # Trigger win condition
-            
+
             # Buttons
             for button in self.buttons:
                 button_rect = pygame.Rect(button['pos'][0] - render_scroll[0], 
@@ -634,7 +634,7 @@ class Game:
                                          button['size'][0], button['size'][1])
                 color = (0, 255, 0) if button['pressed'] else (255, 0, 0)
                 pygame.draw.rect(self.display, color, button_rect)
-            
+
             # Springs
             for spring in self.springs:
                 spring.render(self.display, offset=render_scroll)
@@ -646,17 +646,17 @@ class Game:
                                       self.exit_door['size'][0], self.exit_door['size'][1])
                 color = (0, 255, 0) if self.exit_open else (100, 100, 100)
                 pygame.draw.rect(self.display, color, exit_rect)
-                
+
                 # Check if player reached exit
                 if self.exit_open and exit_rect.colliderect(self.player.rect()):
                     self.won = True
-            
+
             # Render portals - always show both portals (squares around player and cursor)
             self.player_portal.render(self.display, offset=render_scroll)
             # Only render cursor portal if it's not in a noportalzone and not fully encompassed by solid tiles
             if not cursor_portal_in_noportalzone and not cursor_portal_encompassed_by_solid:
                 self.cursor_portal.render(self.display, offset=render_scroll)
-            
+
             # Handle events
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -714,7 +714,7 @@ class Game:
                                 self.player_portal.lock('right')  # 'right' = white
                                 self.cursor_portal.lock('right')
                                 self.current_portal_color = 'white'
-            
+
             # Update transition
             if self.transition_active:
                 self.transition_progress += 1.0 / self.transition_duration
@@ -722,7 +722,7 @@ class Game:
                     # Transition complete, perform the action
                     self.transition_active = False
                     self.transition_progress = 0
-                    
+
                     if self.transition_type == 'death':
                         self.load_level(self.level)
                         self.dead = 0
@@ -731,11 +731,11 @@ class Game:
                         game_dir = os.path.dirname(os.path.abspath(__file__))
                         levelselect_path = os.path.join(game_dir, 'data', 'maps', 'levelselect.json')
                         self.tilemap.load(levelselect_path)
-                        
+
                         # Reset portals
                         self.player_portal.unlock()
                         self.cursor_portal.unlock()
-                        
+
                         # Reset game elements
                         self.crates = []
                         self.buttons = []
@@ -745,13 +745,13 @@ class Game:
                         self.keys = []
                         self.doors = []
                         self.has_key = False
-                        
+
                         # Extract spawners from levelselect
                         for spawner in self.tilemap.extract([('spawners', 0), ('spawners', 1), ('spawners', 2), 
                                                              ('spawners', 3), ('spawners', 6), ('spawners', 7)]):
                             variant = spawner['variant']
                             pos = spawner['pos']
-                            
+
                             if variant == 0:  # Player spawn
                                 self.player.pos = pos
                                 self.player.air_time = 0
@@ -764,33 +764,33 @@ class Game:
                                 self.springs.append(Spring(self, pos))
                             elif variant == 7:  # Exit door
                                 self.exit_door = {'pos': pos, 'size': (16, 32)}
-                        
+
                         # Extract keys and doors from offgrid tiles
                         for tile in self.tilemap.offgrid_tiles:
                             if tile['type'] == 'key':
                                 self.keys.append(tile)
                             elif tile['type'] == 'door':
                                 self.doors.append(tile)
-                        
+
                         self.scroll = [0, 0]
                         self.dead = 0
                         self.won = False
                     self.transition_type = None
-            
+
             # Handle death - start transition if not already active
             if self.dead and not self.transition_active:
                 self.transition_active = True
                 self.transition_type = 'death'
                 self.transition_progress = 0
-            
+
             # Handle win - start transition if not already active
             if self.won and not self.transition_active:
                 self.transition_active = True
                 self.transition_type = 'win'
                 self.transition_progress = 0
-            
+
             self.display_2.blit(self.display, (0, 0))
-            
+
             # Render transition overlay
             if self.transition_active:
                 # Calculate fade alpha: fade in to black (0 -> 255) in first half, stay black in second half
@@ -800,13 +800,13 @@ class Game:
                 else:
                     # Stay black: 1 (50% to 100% of transition)
                     fade_alpha = 255
-                
+
                 # Create overlay surface
                 overlay = pygame.Surface(self.display_2.get_size())
                 overlay.fill((0, 0, 0))
                 overlay.set_alpha(fade_alpha)
                 self.display_2.blit(overlay, (0, 0))
-            
+
             self.screen.blit(pygame.transform.scale(self.display_2, self.screen.get_size()), (0, 0))
             pygame.display.update()
             self.clock.tick(60)
