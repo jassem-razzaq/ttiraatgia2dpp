@@ -105,6 +105,7 @@ class Tilemap:
             # Skip rendering spawner variants that are handled elsewhere (boxes=1, springs=3)
             if tile['type'] == 'spawners' and tile['variant'] in [1, 3]:
                 continue  # These are handled by game/editor rendering
+            # Door and key are already centered in their position, so render them directly
             surf.blit(self.game.assets[tile['type']][tile['variant']], (tile['pos'][0] - offset[0], tile['pos'][1] - offset[1]))
             
         for x in range(offset[0] // self.tile_size, (offset[0] + surf.get_width()) // self.tile_size + 1):
@@ -143,5 +144,14 @@ class Tilemap:
                         # Convert old red_box to spring_horizontal
                         if tile['type'] == 'red_box':
                             tile['type'] = 'spring_horizontal'
+                    elif tile['type'] in ['door', 'key']:
+                        # Center door and key on the tile (they're 48x48, tiles are 16x16)
+                        tile_img = self.game.assets[tile['type']][0]
+                        tile_x = tile['pos'][0] * self.tile_size - offset[0]
+                        tile_y = tile['pos'][1] * self.tile_size - offset[1]
+                        # Center the 48x48 image on the 16x16 tile
+                        offset_x = (self.tile_size - tile_img.get_width()) // 2
+                        offset_y = (self.tile_size - tile_img.get_height()) // 2
+                        surf.blit(tile_img, (tile_x + offset_x, tile_y + offset_y))
                     else:
                         surf.blit(self.game.assets[tile['type']][tile['variant']], (tile['pos'][0] * self.tile_size - offset[0], tile['pos'][1] * self.tile_size - offset[1]))

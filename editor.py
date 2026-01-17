@@ -36,11 +36,11 @@ class Editor:
         spikes_img = pygame.transform.scale(spikes_large_img, (16, 8))
         
         # Load spring_horizontal image for horizontal launcher tile
-        spring_horizontal_img = pygame.image.load(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'images', 'spring_horizontal.png')).convert_alpha()
+        game_dir = os.path.dirname(os.path.abspath(__file__))
+        spring_horizontal_img = pygame.image.load(os.path.join(game_dir, 'data', 'images', 'spring_horizontal.png')).convert_alpha()
         
         # Load spring with alpha transparency
-        spring_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'images', 'spring.png')
-        spring_img = pygame.image.load(spring_path).convert_alpha()
+        spring_img = pygame.image.load(os.path.join(game_dir, 'data', 'images', 'spring.png')).convert_alpha()
         
         self.assets = {
             'decor': load_images('tiles/decor'),
@@ -88,7 +88,7 @@ class Editor:
             
             self.tilemap.render(self.display, offset=render_scroll)
             
-            # Render boxes and springs from offgrid tiles
+            # Render boxes, springs, doors, and keys from offgrid tiles
             for tile in self.tilemap.offgrid_tiles:
                 if tile['type'] == 'spawners':
                     if tile['variant'] == 1:  # Box
@@ -98,6 +98,10 @@ class Editor:
                         spring_img = self.assets['spring'][0].copy()
                         # Use spring image as-is without scaling
                         self.display.blit(spring_img, (tile['pos'][0] - render_scroll[0], tile['pos'][1] - render_scroll[1]))
+                elif tile['type'] in ['door', 'key']:
+                    # Door and key are already centered in their position
+                    tile_img = self.assets[tile['type']][0]
+                    self.display.blit(tile_img, (tile['pos'][0] - render_scroll[0], tile['pos'][1] - render_scroll[1]))
             
             # Handle box, spring, and spikes separately since they're single images, not lists
             if self.tile_list[self.tile_group] == 'box':
@@ -110,6 +114,8 @@ class Editor:
                 # Apply rotation if any
                 if self.tile_rotation != 0:
                     current_tile_img = pygame.transform.rotate(current_tile_img, -self.tile_rotation)
+            elif self.tile_list[self.tile_group] in ['door', 'key']:
+                current_tile_img = self.assets[self.tile_list[self.tile_group]][0].copy()
             else:
                 current_tile_img = self.assets[self.tile_list[self.tile_group]][self.tile_variant].copy()
             current_tile_img.set_alpha(100)
@@ -138,10 +144,22 @@ class Editor:
                         spike_pos = (tile_x, tile_y + 8)  # Default bottom half
                     
                     self.display.blit(current_tile_img, spike_pos)
+                elif self.tile_list[self.tile_group] in ['door', 'key']:
+                    # Center door and key on the tile (they're 48x48, tiles are 16x16)
+                    tile_x = tile_pos[0] * self.tilemap.tile_size - self.scroll[0]
+                    tile_y = tile_pos[1] * self.tilemap.tile_size - self.scroll[1]
+                    # Center the 48x48 image on the 16x16 tile
+                    offset_x = (self.tilemap.tile_size - current_tile_img.get_width()) // 2
+                    offset_y = (self.tilemap.tile_size - current_tile_img.get_height()) // 2
+                    self.display.blit(current_tile_img, (tile_x + offset_x, tile_y + offset_y))
                 else:
                     self.display.blit(current_tile_img, (tile_pos[0] * self.tilemap.tile_size - self.scroll[0], tile_pos[1] * self.tilemap.tile_size - self.scroll[1]))
             else:
-                self.display.blit(current_tile_img, mpos)
+                # For offgrid placement, center door and key on cursor
+                if self.tile_list[self.tile_group] in ['door', 'key']:
+                    self.display.blit(current_tile_img, (mpos[0] - current_tile_img.get_width() // 2, mpos[1] - current_tile_img.get_height() // 2))
+                else:
+                    self.display.blit(current_tile_img, mpos)
             
             if self.clicking and self.ongrid:
                 # Box is placed as a spawner variant 1 (crate spawner) in offgrid
@@ -153,6 +171,16 @@ class Editor:
                 elif self.tile_list[self.tile_group] == 'spikes':
                     # Spikes tile with rotation
                     self.tilemap.tilemap[str(tile_pos[0]) + ';' + str(tile_pos[1])] = {'type': 'spikes', 'variant': 0, 'pos': tile_pos, 'rotation': self.tile_rotation}
+                elif self.tile_list[self.tile_group] in ['door', 'key']:
+                    # Door and key are placed as offgrid tiles, centered on the tile
+                    tile_img = self.assets[self.tile_list[self.tile_group]][0]
+                    tile_x = tile_pos[0] * self.tilemap.tile_size
+                    tile_y = tile_pos[1] * self.tilemap.tile_size
+                    # Center the 48x48 image on the 16x16 tile
+                    offset_x = (self.tilemap.tile_size - tile_img.get_width()) // 2
+                    offset_y = (self.tilemap.tile_size - tile_img.get_height()) // 2
+                    centered_pos = (tile_x + offset_x, tile_y + offset_y)
+                    self.tilemap.offgrid_tiles.append({'type': self.tile_list[self.tile_group], 'variant': 0, 'pos': centered_pos})
                 else:
                     self.tilemap.tilemap[str(tile_pos[0]) + ';' + str(tile_pos[1])] = {'type': self.tile_list[self.tile_group], 'variant': self.tile_variant, 'pos': tile_pos}
             if self.right_clicking:
@@ -192,6 +220,11 @@ class Editor:
                             elif self.tile_list[self.tile_group] == 'spring':
                                 # Spring variant 3 (bottom attached, launches upward)
                                 self.tilemap.offgrid_tiles.append({'type': 'spawners', 'variant': 3, 'pos': (mpos[0] + self.scroll[0], mpos[1] + self.scroll[1])})
+                            elif self.tile_list[self.tile_group] in ['door', 'key']:
+                                # Center door and key on cursor position
+                                tile_img = self.assets[self.tile_list[self.tile_group]][0]
+                                centered_pos = (mpos[0] + self.scroll[0] - tile_img.get_width() // 2, mpos[1] + self.scroll[1] - tile_img.get_height() // 2)
+                                self.tilemap.offgrid_tiles.append({'type': self.tile_list[self.tile_group], 'variant': 0, 'pos': centered_pos})
                             else:
                                 self.tilemap.offgrid_tiles.append({'type': self.tile_list[self.tile_group], 'variant': self.tile_variant, 'pos': (mpos[0] + self.scroll[0], mpos[1] + self.scroll[1])})
                     if event.button == 3:
