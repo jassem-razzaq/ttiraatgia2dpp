@@ -54,7 +54,7 @@ class Editor:
             'box': [load_image('entities/box.png')],  # Box as a single-item list for consistency
             'spring': [spring_img],
             'door': [door],
-            'key': [key],  # Spring with alpha transparency
+            'key': [key],
         }
         
         self.movement = [False, False, False, False]

@@ -60,7 +60,7 @@ class Game:
             'player/jump': Animation(load_images('entities/player/jump')),
             'player/wall_slide': Animation(load_images('entities/player/wall_slide')),
             'box': load_image('entities/box.png'),
-            'background': pygame.transform.scale(load_image('background.png'), (self.display_2.get_width(), self.display_2.get_height())),
+            'background': pygame.transform.scale(load_image('background2.png'), (self.display_2.get_width(), self.display_2.get_height())),
             'door': [door],
             'key': [key],
         }
@@ -489,7 +489,7 @@ class Game:
                             
                             # Launch horizontally based on which side player is on
                             # Use larger horizontal velocity if player is more to the side
-                            launch_power = 5.0  # Base launch power
+                            launch_power = 8.0  # Base launch power
                             if abs(dx) > abs(dy):  # Player is more to the side
                                 if dx > 0:  # Player is to the right, launch right
                                     self.player.velocity[0] = launch_power

@@ -68,7 +68,7 @@ class Tilemap:
         self.tilemap = map_data['tilemap']
         self.tile_size = map_data['tile_size']
         self.offgrid_tiles = map_data['offgrid']
-        
+    
         # Convert old red_box tiles to spring_horizontal for backwards compatibility
         for loc in self.tilemap:
             if self.tilemap[loc]['type'] == 'red_box':
