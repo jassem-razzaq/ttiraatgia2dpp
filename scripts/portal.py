@@ -7,22 +7,22 @@ class Portal:
         self.size = size
         self.pos = [0, 0]
         self.locked = False
-        self.lock_type = None  # 'left' for opposite edge (blue), 'right' for adjacent edge (orange)
+        self.lock_type = None  # 'left' for opposite edge (red), 'right' for adjacent edge (white)
         self.locked_pos = [0, 0]
         self.color = (200, 200, 200)  # Default gray
         self.thickness = 2
         
         # Portal animations
         if hasattr(game, 'assets'):
-            self.blue_animation = game.assets.get('portal/blue', None)
-            self.orange_animation = game.assets.get('portal/orange', None)
-            if self.blue_animation:
-                self.blue_animation = self.blue_animation.copy()
-            if self.orange_animation:
-                self.orange_animation = self.orange_animation.copy()
+            self.red_animation = game.assets.get('portal/red', None)
+            self.white_animation = game.assets.get('portal/white', None)
+            if self.red_animation:
+                self.red_animation = self.red_animation.copy()
+            if self.white_animation:
+                self.white_animation = self.white_animation.copy()
         else:
-            self.blue_animation = None
-            self.orange_animation = None
+            self.red_animation = None
+            self.white_animation = None
         
     def update(self, follow_pos):
         if not self.locked:
@@ -34,10 +34,10 @@ class Portal:
             self.pos = self.locked_pos.copy()
         
         # Update animations
-        if self.blue_animation:
-            self.blue_animation.update()
-        if self.orange_animation:
-            self.orange_animation.update()
+        if self.red_animation:
+            self.red_animation.update()
+        if self.white_animation:
+            self.white_animation.update()
     
     def lock(self, lock_type):
         self.locked = True
@@ -45,10 +45,10 @@ class Portal:
         self.locked_pos = self.pos.copy()
         
         if lock_type == 'left':
-            self.color = (100, 150, 255)  # Bright blue
+            self.color = (100, 150, 255)  # Bright red
             self.thickness = 4
         elif lock_type == 'right':
-            self.color = (255, 150, 50)  # Bright orange
+            self.color = (255, 150, 50)  # Bright white
             self.thickness = 4
     
     def unlock(self):
@@ -144,16 +144,16 @@ class Portal:
         then exit from the opposite/adjacent edge.
         
         Momentum is preserved and transformed based on the edge transformation:
-        - Blue portals: Opposite direction (reverse velocity)
-        - Orange portals: Perpendicular direction (rotate velocity 90 degrees clockwise)
+        - red portals: Opposite direction (reverse velocity)
+        - white portals: Perpendicular direction (rotate velocity 90 degrees clockwise)
         
-        For BLUE portals (left click):
+        For red portals (left click):
         - Exit from right edge → Enter from left edge (inside, near left edge)
         - Exit from left edge → Enter from right edge (inside, near right edge)
         - Exit from top edge → Enter from bottom edge (inside, near bottom edge)
         - Exit from bottom edge → Enter from top edge (inside, near top edge)
         
-        For ORANGE portals (right click):
+        For white portals (right click):
         - Exit from right edge → Enter from bottom edge (inside, near bottom edge)
         - Exit from bottom edge → Enter from right edge (inside, near right edge)
         - Exit from left edge → Enter from top edge (inside, near top edge)
@@ -170,7 +170,7 @@ class Portal:
         # Small offset to place entity just inside the portal (not at the exact edge)
         offset = 4
         
-        if self.lock_type == 'left':  # Blue portal - opposite edge
+        if self.lock_type == 'left':  # red portal - opposite edge
             # Exit from one edge, enter from opposite edge going inside
             # Momentum is preserved in the same direction as entry
             if exit_edge == 'left':  # Exiting left edge, enter from right edge (inside, near right)
@@ -214,7 +214,7 @@ class Portal:
                 entity.velocity[0] = old_velocity[0]  # Keep horizontal velocity
                 entity.velocity[1] = old_velocity[1] if old_velocity[1] > 0 else abs(old_velocity[1])
                 
-        elif self.lock_type == 'right':  # Orange portal - adjacent edge (counter-clockwise exit rotation)
+        elif self.lock_type == 'right':  # white portal - adjacent edge (counter-clockwise exit rotation)
             # Enter right → Exit bottom (moving right → moving down)
             # Enter bottom → Exit right (moving down → moving left)
             # Enter left → Exit top (moving left → moving up)
@@ -278,7 +278,7 @@ class Portal:
         # After teleportation, update last_pos to be outside the exit portal
         # This prevents immediate re-teleportation detection
         # We set it to a position just outside the entry edge
-        if self.lock_type == 'left':  # Blue portal
+        if self.lock_type == 'left':  # red portal
             if exit_edge == 'left':  # Entered from right
                 entity.last_pos[0] = exit_rect.right + 1
             elif exit_edge == 'right':  # Entered from left
@@ -287,7 +287,7 @@ class Portal:
                 entity.last_pos[1] = exit_rect.bottom + 1
             elif exit_edge == 'bottom':  # Entered from top
                 entity.last_pos[1] = exit_rect.top - entity.size[1] - 1
-        elif self.lock_type == 'right':  # Orange portal
+        elif self.lock_type == 'right':  # white portal
             if exit_edge == 'right':  # Entered from bottom
                 entity.last_pos[1] = exit_rect.bottom + 1
             elif exit_edge == 'bottom':  # Entered from right
@@ -305,16 +305,16 @@ class Portal:
         
         # Render portal sprite based on lock type
         if self.locked and self.lock_type:
-            if self.lock_type == 'left' and self.blue_animation:
-                # Blue portal for left click
-                portal_img = self.blue_animation.img()
+            if self.lock_type == 'left' and self.red_animation:
+                # red portal for left click
+                portal_img = self.red_animation.img()
                 # Scale image to portal size if needed
                 if portal_img.get_width() != self.size or portal_img.get_height() != self.size:
                     portal_img = pygame.transform.scale(portal_img, (self.size, self.size))
                 surf.blit(portal_img, (x, y))
-            elif self.lock_type == 'right' and self.orange_animation:
-                # Orange portal for right click
-                portal_img = self.orange_animation.img()
+            elif self.lock_type == 'right' and self.white_animation:
+                # white portal for right click
+                portal_img = self.white_animation.img()
                 # Scale image to portal size if needed
                 if portal_img.get_width() != self.size or portal_img.get_height() != self.size:
                     portal_img = pygame.transform.scale(portal_img, (self.size, self.size))

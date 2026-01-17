@@ -42,8 +42,8 @@ class Game:
         spring_horizontal_img = pygame.image.load(os.path.join(game_dir, 'data', 'images', 'spring_horizontal.png')).convert_alpha()
         
         # Load portal sprites
-        portal_blue_images = load_images('portal_blue')
-        portal_orange_images = load_images('portal_orange')
+        portal_red_images = load_images('portal_red')
+        portal_white_images = load_images('portal_white')
         
         self.assets = {
             'decor': load_images('tiles/decor'),
@@ -53,8 +53,8 @@ class Game:
             'noportalzone': [noportalzone_img],  # Single-item list for consistency
             'spikes': [spikes_img],  # Single-item list, half tile size
             'spring_horizontal': [spring_horizontal_img],  # Horizontal spring launcher tile
-            'portal/blue': Animation(portal_blue_images, img_dur=5),
-            'portal/orange': Animation(portal_orange_images, img_dur=5),
+            'portal/red': Animation(portal_red_images, img_dur=5),
+            'portal/white': Animation(portal_white_images, img_dur=5),
             'player/idle': Animation(load_images('entities/player/idle'), img_dur=6),
             'player/run': Animation(load_images('entities/player/run'), img_dur=4),
             'player/jump': Animation(load_images('entities/player/jump')),
@@ -74,7 +74,7 @@ class Game:
         self.cursor_portal = Portal(self, size=64)
         self.mouse_pos = [0, 0]
         self.portal_mode = False  # Track if shift is held (portal mode active)
-        self.current_portal_color = None  # 'blue' or 'orange' when locked
+        self.current_portal_color = None  # 'red' or 'white' when locked
         
         # Game elements
         self.crates = []
@@ -676,15 +676,15 @@ class Game:
                     if event.key == pygame.K_r:
                         # Restart level
                         self.load_level(self.level)
-                    # Enter portal mode when shift is pressed - automatically enters blue mode
+                    # Enter portal mode when shift is pressed - automatically enters red mode
                     # Only if cursor is not in a blocked zone
                     if event.key == pygame.K_LSHIFT or event.key == pygame.K_RSHIFT:
                         if not portal_placement_blocked:
                             self.portal_mode = True
-                            # Automatically lock portals in blue mode
-                            self.player_portal.lock('left')  # 'left' = blue
+                            # Automatically lock portals in red mode
+                            self.player_portal.lock('left')  # 'left' = red
                             self.cursor_portal.lock('left')
-                            self.current_portal_color = 'blue'
+                            self.current_portal_color = 'red'
                 if event.type == pygame.KEYUP:
                     if event.key == pygame.K_LEFT or event.key == pygame.K_a:
                         self.movement[0] = False
@@ -703,20 +703,20 @@ class Game:
                         # Block portal placement if cursor or cursor portal is over noportalzone
                         if portal_placement_blocked:
                             pass  # Do nothing, portal placement is disabled
-                        elif event.button == 1:  # Left click - switch to blue portal (only if in orange mode)
-                            if self.current_portal_color == 'orange':
+                        elif event.button == 1:  # Left click - switch to red portal (only if in white mode)
+                            if self.current_portal_color == 'white':
                                 self.player_portal.unlock()
                                 self.cursor_portal.unlock()
-                                self.player_portal.lock('left')  # 'left' = blue
+                                self.player_portal.lock('left')  # 'left' = red
                                 self.cursor_portal.lock('left')
-                                self.current_portal_color = 'blue'
-                        elif event.button == 3:  # Right click - switch to orange portal
-                            if self.current_portal_color == 'blue':
+                                self.current_portal_color = 'red'
+                        elif event.button == 3:  # Right click - switch to white portal
+                            if self.current_portal_color == 'red':
                                 self.player_portal.unlock()
                                 self.cursor_portal.unlock()
-                                self.player_portal.lock('right')  # 'right' = orange
+                                self.player_portal.lock('right')  # 'right' = white
                                 self.cursor_portal.lock('right')
-                                self.current_portal_color = 'orange'
+                                self.current_portal_color = 'white'
             
             # Update transition
             if self.transition_active:
