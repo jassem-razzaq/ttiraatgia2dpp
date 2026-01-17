@@ -13,9 +13,9 @@ class Game:
         pygame.init()
 
         pygame.display.set_caption('Portal Puzzle')
-        self.screen = pygame.display.set_mode((640, 480))
-        self.display = pygame.Surface((320, 240), pygame.SRCALPHA)
-        self.display_2 = pygame.Surface((320, 240))
+        self.screen = pygame.display.set_mode((960, 640))
+        self.display = pygame.Surface((540, 380), pygame.SRCALPHA)
+        self.display_2 = pygame.Surface((540, 380))
 
         self.clock = pygame.time.Clock()
         
@@ -31,7 +31,7 @@ class Game:
             'player/jump': Animation(load_images('entities/player/jump')),
             'player/wall_slide': Animation(load_images('entities/player/wall_slide')),
             'box': load_image('entities/box.png'),
-            'background': load_image('background.png'),
+            'background': pygame.transform.scale(load_image('background.png'), (self.display_2.get_width(), self.display_2.get_height())),
         }
         
         self.player = Player(self, (50, 50), (8, 15))
@@ -203,9 +203,7 @@ class Game:
                 if laser_rect.colliderect(self.player.rect()):
                     self.dead = 1
             
-            # Update scroll
-            self.scroll[0] += (self.player.rect().centerx - self.display.get_width() / 2 - self.scroll[0]) / 30
-            self.scroll[1] += (self.player.rect().centery - self.display.get_height() / 2 - self.scroll[1]) / 30
+            # Camera is static (no player tracking)
             render_scroll = (int(self.scroll[0]), int(self.scroll[1]))
             
             # Render tilemap

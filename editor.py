@@ -5,15 +5,17 @@ import pygame
 from scripts.utils import load_images, load_image
 from scripts.tilemap import Tilemap
 
-RENDER_SCALE = 2.0
-
 class Editor:
     def __init__(self):
         pygame.init()
 
         pygame.display.set_caption('editor')
-        self.screen = pygame.display.set_mode((640, 480))
-        self.display = pygame.Surface((320, 240))
+        self.screen = pygame.display.set_mode((960, 640))
+        self.display = pygame.Surface((540, 380))
+        
+        # Calculate scale factors for mouse position conversion
+        self.scale_x = self.screen.get_width() / self.display.get_width()
+        self.scale_y = self.screen.get_height() / self.display.get_height()
 
         self.clock = pygame.time.Clock()
         
@@ -81,7 +83,8 @@ class Editor:
             current_tile_img.set_alpha(100)
             
             mpos = pygame.mouse.get_pos()
-            mpos = (mpos[0] / RENDER_SCALE, mpos[1] / RENDER_SCALE)
+            # Convert mouse position from screen coordinates to display coordinates
+            mpos = (mpos[0] / self.scale_x, mpos[1] / self.scale_y)
             tile_pos = (int((mpos[0] + self.scroll[0]) // self.tilemap.tile_size), int((mpos[1] + self.scroll[1]) // self.tilemap.tile_size))
             
             if self.ongrid:

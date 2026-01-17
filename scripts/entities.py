@@ -266,6 +266,15 @@ class Spring:
         self.cooldown_timer = 0  # Frames remaining in cooldown (300 frames = 5 seconds at 60fps)
         self.is_active = True  # Whether spring can bounce entities
         
+        # NEW: Track the current bounce height for each entity to maintain constant bounces
+        self.entity_bounce_heights = {}  # {entity_id: launch_power}
+        
+        # Constants for bounce behavior
+        self.BASE_BOUNCE_POWER = 3.0  # Base constant bounce height (normal bounce)
+        self.MIN_HIGH_JUMP_VELOCITY = 5.0  # Minimum impact velocity to trigger high bounce
+        self.HIGH_BOUNCE_MULTIPLIER = 0.6  # Multiplier for high jumps (reduced from 0.8)
+        self.MAX_BOUNCE_POWER = 6.0  # Absolute maximum launch power
+        
         # For portal teleport tracking
         self.last_pos = list(pos)
         self.teleported_this_frame = False
@@ -348,6 +357,9 @@ class Spring:
                     # Only reset if they're on actual ground, not just the spring
                     if on_tile:
                         self.bounced_entities.discard(entity_id)
+                        # Reset the stored bounce height when entity touches ground
+                        if entity_id in self.entity_bounce_heights:
+                            del self.entity_bounce_heights[entity_id]
         
         # Track which entities are currently touching
         currently_touching = set()
@@ -401,22 +413,27 @@ class Spring:
                             # Use the larger value to catch fast-moving entities
                             impact_velocity = max(velocity_based, position_based)
                             
-                            # Base launch power + impact velocity multiplier
-                            # Launch power proportional to impact velocity
-                            # Reduced multiplier to prevent excessive height gain
-                            launch_power = 1.5 + impact_velocity * 0.8
-                            # Cap maximum launch power more strictly to prevent infinite height
-                            launch_power = min(launch_power, 6.0)
+                            # Determine launch power based on new logic:
+                            # 1. If entity has a stored bounce height, use it (maintain constant height)
+                            # 2. If impact velocity is HIGH (jumped from above), calculate proportional bounce
+                            # 3. Otherwise, use base bounce power
+                            
+                            if entity_id in self.entity_bounce_heights:
+                                # Entity already has a bounce height - maintain it
+                                launch_power = self.entity_bounce_heights[entity_id]
+                            elif impact_velocity >= self.MIN_HIGH_JUMP_VELOCITY:
+                                # High impact - calculate proportional bounce and store it
+                                launch_power = self.BASE_BOUNCE_POWER + impact_velocity * self.HIGH_BOUNCE_MULTIPLIER
+                                launch_power = min(launch_power, self.MAX_BOUNCE_POWER)
+                                # Store this bounce height for future bounces
+                                self.entity_bounce_heights[entity_id] = launch_power
+                            else:
+                                # Normal bounce - use base power and store it
+                                launch_power = self.BASE_BOUNCE_POWER
+                                self.entity_bounce_heights[entity_id] = launch_power
                             
                             # Launch entity UP - REPLACE velocity (don't add to existing upward velocity)
-                            # If entity is already moving up, use the larger of current upward velocity or launch power
-                            # This prevents stacking but allows higher bounces from faster falls
-                            if entity.velocity[1] < 0:  # Already moving up
-                                # Use the larger upward velocity (more negative = higher)
-                                entity.velocity[1] = min(entity.velocity[1], -launch_power)
-                            else:  # Moving down or stationary
-                                # Set to launch power
-                                entity.velocity[1] = -launch_power
+                            entity.velocity[1] = -launch_power
                             
                             # Mark entity as bounced - they can't be bounced again until they hit ground
                             self.bounced_entities.add(entity_id)
