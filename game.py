@@ -77,6 +77,10 @@ class Game:
         self.exit_door = None
         self.exit_open = False
         
+        # Key system
+        self.has_key = False  # Whether player has collected the key
+        self.room_has_key = False  # Whether the current room has a key
+        
         self.level = 0
         self.load_level(self.level)
         
@@ -90,10 +94,19 @@ class Game:
         self.transition_progress = 0  # 0 to 1
         self.transition_duration = 60  # frames for fade in + out
         
-    def load_level(self, map_id):
+    def load_level(self, map_id_or_path):
         # Get the game directory
         game_dir = os.path.dirname(os.path.abspath(__file__))
-        map_path = os.path.join(game_dir, 'data', 'maps', str(map_id) + '.json')
+        # If map_id_or_path is a number or string that's all digits, treat it as map_id
+        # Otherwise, treat it as a full path
+        if isinstance(map_id_or_path, int):
+            map_path = os.path.join(game_dir, 'data', 'maps', str(map_id_or_path) + '.json')
+        elif isinstance(map_id_or_path, str) and map_id_or_path.isdigit():
+            map_path = os.path.join(game_dir, 'data', 'maps', map_id_or_path + '.json')
+        else:
+            # It's already a path
+            map_path = map_id_or_path
+        
         self.tilemap.load(map_path)
         
         # Reset portals
@@ -107,6 +120,23 @@ class Game:
         self.lasers = []
         self.exit_door = None
         self.exit_open = False
+        
+        # Reset key system
+        self.has_key = False
+        self.room_has_key = False
+        
+        # Check if room has a key (in tilemap or offgrid)
+        for loc in self.tilemap.tilemap:
+            tile = self.tilemap.tilemap[loc]
+            if tile['type'] == 'key':
+                self.room_has_key = True
+                break
+        
+        if not self.room_has_key:
+            for tile in self.tilemap.offgrid_tiles:
+                if tile['type'] == 'key':
+                    self.room_has_key = True
+                    break
         
         for spawner in self.tilemap.extract([('spawners', 0), ('spawners', 1), ('spawners', 2), 
                                              ('spawners', 3), ('spawners', 6), ('spawners', 7)]):
@@ -345,6 +375,69 @@ class Game:
                         if player_rect.colliderect(spike_rect):
                             self.dead = 1
                             break
+            
+            # Check key collection
+            if not self.dead and not self.transition_active and not self.has_key:
+                player_rect = self.player.rect()
+                # Check key tiles in tilemap
+                for loc in list(self.tilemap.tilemap.keys()):
+                    tile = self.tilemap.tilemap[loc]
+                    if tile['type'] == 'key':
+                        tile_x = tile['pos'][0] * self.tilemap.tile_size
+                        tile_y = tile['pos'][1] * self.tilemap.tile_size
+                        # Key is 48x48, but tile size is 16x16, so we need to check the actual key size
+                        key_rect = pygame.Rect(tile_x, tile_y, 48, 48)
+                        if player_rect.colliderect(key_rect):
+                            # Collect the key
+                            self.has_key = True
+                            # Remove key from tilemap
+                            del self.tilemap.tilemap[loc]
+                            break
+                
+                # Check key tiles in offgrid_tiles
+                if not self.has_key:
+                    for tile in self.tilemap.offgrid_tiles[:]:  # Use slice copy to safely remove during iteration
+                        if tile['type'] == 'key':
+                            key_rect = pygame.Rect(tile['pos'][0], tile['pos'][1], 48, 48)
+                            if player_rect.colliderect(key_rect):
+                                # Collect the key
+                                self.has_key = True
+                                # Remove key from offgrid_tiles
+                                self.tilemap.offgrid_tiles.remove(tile)
+                                break
+            
+            # Check door collisions
+            if not self.dead and not self.transition_active:
+                player_rect = self.player.rect()
+                # Check if door can be used (no key required OR key collected)
+                can_use_door = not self.room_has_key or self.has_key
+                
+                if can_use_door:
+                    # Check door tiles in tilemap
+                    for loc in self.tilemap.tilemap:
+                        tile = self.tilemap.tilemap[loc]
+                        if tile['type'] == 'door':
+                            tile_x = tile['pos'][0] * self.tilemap.tile_size
+                            tile_y = tile['pos'][1] * self.tilemap.tile_size
+                            # Door is 48x48, but tile size is 16x16, so we need to check the actual door size
+                            door_rect = pygame.Rect(tile_x, tile_y, 48, 48)
+                            if player_rect.colliderect(door_rect):
+                                # Load levelselect.json
+                                game_dir = os.path.dirname(os.path.abspath(__file__))
+                                levelselect_path = os.path.join(game_dir, 'data', 'maps', 'levelselect.json')
+                                self.load_level(levelselect_path)
+                                break
+                    
+                    # Check door tiles in offgrid_tiles
+                    for tile in self.tilemap.offgrid_tiles:
+                        if tile['type'] == 'door':
+                            door_rect = pygame.Rect(tile['pos'][0], tile['pos'][1], 48, 48)
+                            if player_rect.colliderect(door_rect):
+                                # Load levelselect.json
+                                game_dir = os.path.dirname(os.path.abspath(__file__))
+                                levelselect_path = os.path.join(game_dir, 'data', 'maps', 'levelselect.json')
+                                self.load_level(levelselect_path)
+                                break
             
             # Camera is static (no player tracking)
             render_scroll = (int(self.scroll[0]), int(self.scroll[1]))
