@@ -114,6 +114,31 @@ class Game:
                 return True
         return False
     
+    def portal_overlaps_noportalzone(self, portal_rect):
+        """Check if any part of a portal rectangle overlaps with any noportalzone tile"""
+        # Get the tile coordinates that the portal rectangle covers
+        min_tile_x = int(portal_rect.left // self.tilemap.tile_size)
+        max_tile_x = int(portal_rect.right // self.tilemap.tile_size)
+        min_tile_y = int(portal_rect.top // self.tilemap.tile_size)
+        max_tile_y = int(portal_rect.bottom // self.tilemap.tile_size)
+        
+        # Check all tiles that the portal rectangle could overlap with
+        for tile_x in range(min_tile_x, max_tile_x + 1):
+            for tile_y in range(min_tile_y, max_tile_y + 1):
+                tile_loc = str(tile_x) + ';' + str(tile_y)
+                if tile_loc in self.tilemap.tilemap:
+                    if self.tilemap.tilemap[tile_loc]['type'] == 'noportalzone':
+                        # Check if this tile actually overlaps with the portal rectangle
+                        tile_rect = pygame.Rect(
+                            tile_x * self.tilemap.tile_size,
+                            tile_y * self.tilemap.tile_size,
+                            self.tilemap.tile_size,
+                            self.tilemap.tile_size
+                        )
+                        if portal_rect.colliderect(tile_rect):
+                            return True
+        return False
+    
     def check_portal_teleport(self, entity):
         """Check if entity should be teleported through portals"""
         if not hasattr(entity, 'last_pos'):
@@ -166,11 +191,10 @@ class Game:
             self.player_portal.update(self.player.rect().center)
             self.cursor_portal.update(self.mouse_pos)
             
-            # Check if cursor or cursor portal is over a noportalzone tile
+            # Check if cursor or cursor portal overlaps with any noportalzone tile
             cursor_in_noportalzone = self.is_in_noportalzone(self.mouse_pos)
-            cursor_portal_center = (self.cursor_portal.pos[0] + self.cursor_portal.size // 2, 
-                                    self.cursor_portal.pos[1] + self.cursor_portal.size // 2)
-            cursor_portal_in_noportalzone = self.is_in_noportalzone(cursor_portal_center)
+            cursor_portal_rect = self.cursor_portal.get_rect()
+            cursor_portal_in_noportalzone = self.portal_overlaps_noportalzone(cursor_portal_rect)
             portal_placement_blocked = cursor_in_noportalzone or cursor_portal_in_noportalzone
             
             # Check button presses
