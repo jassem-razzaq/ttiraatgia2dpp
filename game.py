@@ -337,7 +337,9 @@ class Game:
             
             # Render portals
             self.player_portal.render(self.display, offset=render_scroll)
-            self.cursor_portal.render(self.display, offset=render_scroll)
+            # Only render cursor portal if it's not in a noportalzone
+            if not cursor_portal_in_noportalzone:
+                self.cursor_portal.render(self.display, offset=render_scroll)
             
             # Handle events
             for event in pygame.event.get():
