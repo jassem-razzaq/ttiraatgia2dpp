@@ -5,7 +5,7 @@ import pygame
 
 from scripts.utils import load_image, load_images, Animation
 from scripts.entities import PhysicsEntity, Player, Crate, Spring
-from scripts.tilemap import Tilemap
+from scripts.tilemap import Tilemap, PHYSICS_TILES
 from scripts.portal import Portal
 
 class Game:
@@ -26,12 +26,17 @@ class Game:
         noportalzone_large_img.set_alpha(128)  # Make it semi-transparent
         noportalzone_img = pygame.transform.scale(noportalzone_large_img, (16, 16))
         
+        # Load spikes image and scale to full width, half height (16x8 for 16x16 tile)
+        spikes_large_img = load_image('spikes.png')
+        spikes_img = pygame.transform.scale(spikes_large_img, (16, 8))
+        
         self.assets = {
             'decor': load_images('tiles/decor'),
             'grass': load_images('tiles/grass'),
             'large_decor': load_images('tiles/large_decor'),
             'stone': load_images('tiles/stone'),
             'noportalzone': [noportalzone_img],  # Single-item list for consistency
+            'spikes': [spikes_img],  # Single-item list, half tile size
             'player/idle': Animation(load_images('entities/player/idle'), img_dur=6),
             'player/run': Animation(load_images('entities/player/run'), img_dur=4),
             'player/jump': Animation(load_images('entities/player/jump')),
@@ -63,6 +68,12 @@ class Game:
         self.scroll = [0, 0]
         self.dead = 0
         self.won = False
+        
+        # Transition system
+        self.transition_active = False
+        self.transition_type = None  # 'death' or 'win'
+        self.transition_progress = 0  # 0 to 1
+        self.transition_duration = 60  # frames for fade in + out
         
     def load_level(self, map_id):
         # Get the game directory
@@ -139,6 +150,39 @@ class Game:
                             return True
         return False
     
+    def portal_fully_encompassed_by_solid(self, portal_rect):
+        """Check if the portal is fully encompassed by grass or stone tiles"""
+        # Get the tile coordinates that the portal rectangle covers
+        min_tile_x = int(portal_rect.left // self.tilemap.tile_size)
+        max_tile_x = int(portal_rect.right // self.tilemap.tile_size)
+        min_tile_y = int(portal_rect.top // self.tilemap.tile_size)
+        max_tile_y = int(portal_rect.bottom // self.tilemap.tile_size)
+        
+        # Check all tiles that the portal rectangle overlaps with
+        for tile_x in range(min_tile_x, max_tile_x + 1):
+            for tile_y in range(min_tile_y, max_tile_y + 1):
+                tile_loc = str(tile_x) + ';' + str(tile_y)
+                tile_rect = pygame.Rect(
+                    tile_x * self.tilemap.tile_size,
+                    tile_y * self.tilemap.tile_size,
+                    self.tilemap.tile_size,
+                    self.tilemap.tile_size
+                )
+                
+                # Check if this tile overlaps with the portal
+                if portal_rect.colliderect(tile_rect):
+                    # If the tile exists and is not grass or stone, portal is not fully encompassed
+                    if tile_loc in self.tilemap.tilemap:
+                        tile = self.tilemap.tilemap[tile_loc]
+                        if tile['type'] not in PHYSICS_TILES:  # Not grass or stone
+                            return False
+                    else:
+                        # If tile doesn't exist (empty space), portal is not fully encompassed
+                        return False
+        
+        # If we get here, all overlapping tiles are grass or stone
+        return True
+    
     def check_portal_teleport(self, entity):
         """Check if entity should be teleported through portals"""
         if not hasattr(entity, 'last_pos'):
@@ -195,7 +239,8 @@ class Game:
             cursor_in_noportalzone = self.is_in_noportalzone(self.mouse_pos)
             cursor_portal_rect = self.cursor_portal.get_rect()
             cursor_portal_in_noportalzone = self.portal_overlaps_noportalzone(cursor_portal_rect)
-            portal_placement_blocked = cursor_in_noportalzone or cursor_portal_in_noportalzone
+            cursor_portal_encompassed_by_solid = self.portal_fully_encompassed_by_solid(cursor_portal_rect)
+            portal_placement_blocked = cursor_in_noportalzone or cursor_portal_in_noportalzone or cursor_portal_encompassed_by_solid
             
             # Check button presses
             for button in self.buttons:
@@ -247,6 +292,44 @@ class Game:
                 laser_rect = pygame.Rect(laser['pos'][0], laser['pos'][1], laser['size'][0], laser['size'][1])
                 if laser_rect.colliderect(self.player.rect()):
                     self.dead = 1
+            
+            # Check if player fell off the screen
+            if not self.dead and not self.transition_active:
+                # Player falls off if they go below the display height (with some margin)
+                if self.player.pos[1] > self.display.get_height() + 100:
+                    self.dead = 1
+            
+            # Check spike collisions
+            if not self.dead and not self.transition_active:
+                player_rect = self.player.rect()
+                # Check all spike tiles
+                for loc in self.tilemap.tilemap:
+                    tile = self.tilemap.tilemap[loc]
+                    if tile['type'] == 'spikes':
+                        tile_x = tile['pos'][0] * self.tilemap.tile_size
+                        tile_y = tile['pos'][1] * self.tilemap.tile_size
+                        # Get rotation angle (default 0 if not set)
+                        rotation = tile.get('rotation', 0)
+                        
+                        # Calculate spike hitbox based on rotation
+                        # Spikes fill full width (16) and half height (8)
+                        spike_width = 16  # Full tile width
+                        spike_height = 8  # Half tile height
+                        if rotation == 0:  # Pointing up (bottom half)
+                            spike_rect = pygame.Rect(tile_x, tile_y + 8, spike_width, spike_height)
+                        elif rotation == 90:  # Pointing right (left half) - rotated, so full height on left
+                            spike_rect = pygame.Rect(tile_x, tile_y, 8, 16)
+                        elif rotation == 180:  # Pointing down (top half)
+                            spike_rect = pygame.Rect(tile_x, tile_y, spike_width, spike_height)
+                        elif rotation == 270:  # Pointing left (right half) - rotated, so full height on right
+                            spike_rect = pygame.Rect(tile_x + 8, tile_y, 8, 16)
+                        else:
+                            # Default to bottom half
+                            spike_rect = pygame.Rect(tile_x, tile_y + 8, spike_width, spike_height)
+                        
+                        if player_rect.colliderect(spike_rect):
+                            self.dead = 1
+                            break
             
             # Camera is static (no player tracking)
             render_scroll = (int(self.scroll[0]), int(self.scroll[1]))
@@ -337,8 +420,8 @@ class Game:
             
             # Render portals
             self.player_portal.render(self.display, offset=render_scroll)
-            # Only render cursor portal if it's not in a noportalzone
-            if not cursor_portal_in_noportalzone:
+            # Only render cursor portal if it's not in a noportalzone and not fully encompassed by solid tiles
+            if not cursor_portal_in_noportalzone and not cursor_portal_encompassed_by_solid:
                 self.cursor_portal.render(self.display, offset=render_scroll)
             
             # Handle events
@@ -381,21 +464,56 @@ class Game:
                             self.player_portal.unlock()
                             self.cursor_portal.unlock()
             
-            # Handle death
-            if self.dead:
-                self.dead += 1
-                if self.dead > 60:
-                    self.load_level(self.level)
+            # Update transition
+            if self.transition_active:
+                self.transition_progress += 1.0 / self.transition_duration
+                if self.transition_progress >= 1.0:
+                    # Transition complete, perform the action
+                    self.transition_active = False
+                    self.transition_progress = 0
+                    
+                    if self.transition_type == 'death':
+                        self.load_level(self.level)
+                        self.dead = 0
+                    elif self.transition_type == 'win':
+                        game_dir = os.path.dirname(os.path.abspath(__file__))
+                        maps_dir = os.path.join(game_dir, 'data', 'maps')
+                        max_level = len([f for f in os.listdir(maps_dir) if f.endswith('.json')]) - 1
+                        self.level = min(self.level + 1, max_level)
+                        self.load_level(self.level)
+                        self.won = False
+                    self.transition_type = None
             
-            # Handle win
-            if self.won:
-                game_dir = os.path.dirname(os.path.abspath(__file__))
-                maps_dir = os.path.join(game_dir, 'data', 'maps')
-                max_level = len([f for f in os.listdir(maps_dir) if f.endswith('.json')]) - 1
-                self.level = min(self.level + 1, max_level)
-                self.load_level(self.level)
+            # Handle death - start transition if not already active
+            if self.dead and not self.transition_active:
+                self.transition_active = True
+                self.transition_type = 'death'
+                self.transition_progress = 0
+            
+            # Handle win - start transition if not already active
+            if self.won and not self.transition_active:
+                self.transition_active = True
+                self.transition_type = 'win'
+                self.transition_progress = 0
             
             self.display_2.blit(self.display, (0, 0))
+            
+            # Render transition overlay
+            if self.transition_active:
+                # Calculate fade alpha: fade in to black (0 -> 255) in first half, stay black in second half
+                if self.transition_progress < 0.5:
+                    # Fade in: 0 to 1 (0% to 50% of transition)
+                    fade_alpha = int((self.transition_progress / 0.5) * 255)
+                else:
+                    # Stay black: 1 (50% to 100% of transition)
+                    fade_alpha = 255
+                
+                # Create overlay surface
+                overlay = pygame.Surface(self.display_2.get_size())
+                overlay.fill((0, 0, 0))
+                overlay.set_alpha(fade_alpha)
+                self.display_2.blit(overlay, (0, 0))
+            
             self.screen.blit(pygame.transform.scale(self.display_2, self.screen.get_size()), (0, 0))
             pygame.display.update()
             self.clock.tick(60)

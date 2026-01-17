@@ -24,12 +24,17 @@ class Editor:
         noportalzone_large_img.set_alpha(128)  # Make it semi-transparent
         noportalzone_img = pygame.transform.scale(noportalzone_large_img, (16, 16))
         
+        # Load spikes image and scale to full width, half height (16x8 for 16x16 tile)
+        spikes_large_img = load_image('spikes.png')
+        spikes_img = pygame.transform.scale(spikes_large_img, (16, 8))
+        
         self.assets = {
             'decor': load_images('tiles/decor'),
             'grass': load_images('tiles/grass'),
             'large_decor': load_images('tiles/large_decor'),
             'stone': load_images('tiles/stone'),
             'noportalzone': [noportalzone_img],  # Single-item list for consistency
+            'spikes': [spikes_img],  # Single-item list, half tile size
             'spawners': load_images('tiles/spawners'),
             'box': [load_image('entities/box.png')],  # Box as a single-item list for consistency
             'spring': [load_image('spring.png', (255, 255, 255))],  # Spring with white colorkey
@@ -49,6 +54,7 @@ class Editor:
         self.tile_list = list(self.assets)
         self.tile_group = 0
         self.tile_variant = 0
+        self.tile_rotation = 0  # Rotation in degrees (0, 90, 180, 270)
         
         self.clicking = False
         self.right_clicking = False
@@ -77,13 +83,18 @@ class Editor:
                         spring_img = pygame.transform.scale(spring_img, (4, 8))
                         self.display.blit(spring_img, (tile['pos'][0] - render_scroll[0], tile['pos'][1] - render_scroll[1]))
             
-            # Handle box and spring separately since they're single images, not lists
+            # Handle box, spring, and spikes separately since they're single images, not lists
             if self.tile_list[self.tile_group] == 'box':
                 current_tile_img = self.assets['box'][0].copy()
             elif self.tile_list[self.tile_group] == 'spring':
                 current_tile_img = self.assets['spring'][0].copy()
                 # Scale spring image
                 current_tile_img = pygame.transform.scale(current_tile_img, (4, 8))
+            elif self.tile_list[self.tile_group] == 'spikes':
+                current_tile_img = self.assets['spikes'][0].copy()
+                # Apply rotation if any
+                if self.tile_rotation != 0:
+                    current_tile_img = pygame.transform.rotate(current_tile_img, -self.tile_rotation)
             else:
                 current_tile_img = self.assets[self.tile_list[self.tile_group]][self.tile_variant].copy()
             current_tile_img.set_alpha(100)
@@ -94,7 +105,26 @@ class Editor:
             tile_pos = (int((mpos[0] + self.scroll[0]) // self.tilemap.tile_size), int((mpos[1] + self.scroll[1]) // self.tilemap.tile_size))
             
             if self.ongrid:
-                self.display.blit(current_tile_img, (tile_pos[0] * self.tilemap.tile_size - self.scroll[0], tile_pos[1] * self.tilemap.tile_size - self.scroll[1]))
+                if self.tile_list[self.tile_group] == 'spikes':
+                    # Position spike in the appropriate half of the tile based on rotation
+                    # Spikes fill full width (16) and half height (8)
+                    tile_x = tile_pos[0] * self.tilemap.tile_size - self.scroll[0]
+                    tile_y = tile_pos[1] * self.tilemap.tile_size - self.scroll[1]
+                    
+                    if self.tile_rotation == 0:  # Pointing up (bottom half, full width)
+                        spike_pos = (tile_x, tile_y + 8)
+                    elif self.tile_rotation == 90:  # Pointing right (left half, full height when rotated)
+                        spike_pos = (tile_x, tile_y)
+                    elif self.tile_rotation == 180:  # Pointing down (top half, full width)
+                        spike_pos = (tile_x, tile_y)
+                    elif self.tile_rotation == 270:  # Pointing left (right half, full height when rotated)
+                        spike_pos = (tile_x + 8, tile_y)
+                    else:
+                        spike_pos = (tile_x, tile_y + 8)  # Default bottom half
+                    
+                    self.display.blit(current_tile_img, spike_pos)
+                else:
+                    self.display.blit(current_tile_img, (tile_pos[0] * self.tilemap.tile_size - self.scroll[0], tile_pos[1] * self.tilemap.tile_size - self.scroll[1]))
             else:
                 self.display.blit(current_tile_img, mpos)
             
@@ -105,6 +135,9 @@ class Editor:
                 elif self.tile_list[self.tile_group] == 'spring':
                     # Spring variant 3 (bottom attached, launches upward)
                     self.tilemap.offgrid_tiles.append({'type': 'spawners', 'variant': 3, 'pos': (tile_pos[0] * self.tilemap.tile_size, tile_pos[1] * self.tilemap.tile_size)})
+                elif self.tile_list[self.tile_group] == 'spikes':
+                    # Spikes tile with rotation
+                    self.tilemap.tilemap[str(tile_pos[0]) + ';' + str(tile_pos[1])] = {'type': 'spikes', 'variant': 0, 'pos': tile_pos, 'rotation': self.tile_rotation}
                 else:
                     self.tilemap.tilemap[str(tile_pos[0]) + ';' + str(tile_pos[1])] = {'type': self.tile_list[self.tile_group], 'variant': self.tile_variant, 'pos': tile_pos}
             if self.right_clicking:
@@ -149,24 +182,26 @@ class Editor:
                     if event.button == 3:
                         self.right_clicking = True
                     if self.shift:
-                        if self.tile_list[self.tile_group] not in ['box', 'spring', 'noportalzone']:  # Box, spring, and noportalzone have special handling
+                        if self.tile_list[self.tile_group] not in ['box', 'spring', 'noportalzone', 'spikes']:  # Box, spring, noportalzone, and spikes have special handling
                             if event.button == 4:
                                 self.tile_variant = (self.tile_variant - 1) % len(self.assets[self.tile_list[self.tile_group]])
                             if event.button == 5:
                                 self.tile_variant = (self.tile_variant + 1) % len(self.assets[self.tile_list[self.tile_group]])
-                        # Spring and noportalzone no longer have variants - removed
+                        # Spring, noportalzone, and spikes no longer have variants - removed
                     else:
                         if event.button == 4:
                             self.tile_group = (self.tile_group - 1) % len(self.tile_list)
                             self.tile_variant = 0
-                            # If switching to spring or noportalzone, ensure variant is valid
-                            if self.tile_list[self.tile_group] in ['spring', 'noportalzone']:
+                            self.tile_rotation = 0  # Reset rotation when switching tiles
+                            # If switching to spring, noportalzone, or spikes, ensure variant is valid
+                            if self.tile_list[self.tile_group] in ['spring', 'noportalzone', 'spikes']:
                                 self.tile_variant = 0
                         if event.button == 5:
                             self.tile_group = (self.tile_group + 1) % len(self.tile_list)
                             self.tile_variant = 0
-                            # If switching to spring or noportalzone, ensure variant is valid
-                            if self.tile_list[self.tile_group] in ['spring', 'noportalzone']:
+                            self.tile_rotation = 0  # Reset rotation when switching tiles
+                            # If switching to spring, noportalzone, or spikes, ensure variant is valid
+                            if self.tile_list[self.tile_group] in ['spring', 'noportalzone', 'spikes']:
                                 self.tile_variant = 0
                 if event.type == pygame.MOUSEBUTTONUP:
                     if event.button == 1:
@@ -191,6 +226,10 @@ class Editor:
                         self.tilemap.save('map.json')
                     if event.key == pygame.K_LSHIFT:
                         self.shift = True
+                    if event.key == pygame.K_r:
+                        # Rotate tile (only for tiles that support rotation like spikes)
+                        if self.tile_list[self.tile_group] == 'spikes':
+                            self.tile_rotation = (self.tile_rotation + 90) % 360
                 if event.type == pygame.KEYUP:
                     if event.key == pygame.K_a:
                         self.movement[0] = False
