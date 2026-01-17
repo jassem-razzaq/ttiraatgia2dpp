@@ -165,11 +165,6 @@ class Game:
                 # Check player
                 if button_rect.colliderect(self.player.rect()):
                     button['pressed'] = True
-                
-                # Check crates
-                for crate in self.crates:
-                    if button_rect.colliderect(crate.rect()):
-                        button['pressed'] = True
             
             # Check if all buttons are pressed (open exit)
             self.exit_open = all(button['pressed'] for button in self.buttons) if self.buttons else False
@@ -186,16 +181,6 @@ class Game:
                         self.player.velocity[0] = spring['power']
                     elif spring['direction'] == 'left':
                         self.player.velocity[0] = -spring['power']
-                
-                # Check crates
-                for crate in self.crates:
-                    if spring_rect.colliderect(crate.rect()):
-                        if spring['direction'] == 'up':
-                            crate.velocity[1] = -spring['power']
-                        elif spring['direction'] == 'right':
-                            crate.velocity[0] = spring['power']
-                        elif spring['direction'] == 'left':
-                            crate.velocity[0] = -spring['power']
             
             # Check laser collisions
             for laser in self.lasers:
@@ -213,48 +198,52 @@ class Game:
             # Render tilemap
             self.tilemap.render(self.display, offset=render_scroll)
             
-            # Update and render crates
+            # Update crates (check for pushing before updating)
             for crate in self.crates:
                 # Check if player is pushing the crate
-                player_rect = self.player.rect()
-                crate_rect = crate.rect()
-                push_force = [0, 0]
-                
-                # Check if player is colliding with crate
-                if player_rect.colliderect(crate_rect) and not self.dead:
-                    # Determine push direction based on player position relative to crate
-                    dx = player_rect.centerx - crate_rect.centerx
-                    dy = player_rect.centery - crate_rect.centery
+                if not self.dead:
+                    player_rect = self.player.rect()
+                    crate_rect = crate.rect()
                     
-                    # Calculate player's horizontal movement (key input + velocity)
-                    player_horizontal_movement = (self.movement[1] - self.movement[0]) + self.player.velocity[0]
-                    
-                    # Horizontal pushing - check both key presses and velocity
-                    if abs(dx) > abs(dy):
-                        if dx < 0 and player_horizontal_movement > 0:  # Player on left, moving right
-                            push_force[0] = 1.5
-                        elif dx > 0 and player_horizontal_movement < 0:  # Player on right, moving left
-                            push_force[0] = -1.5
+                    # Check if player is colliding with crate and moving horizontally
+                    if player_rect.colliderect(crate_rect):
+                        player_horizontal_movement = (self.movement[1] - self.movement[0])
+                        
+                        # Simple pushing: if player is moving left/right and colliding, move crate directly
+                        if player_horizontal_movement > 0:  # Player moving right
+                            # Check if player is on the left side of crate
+                            if player_rect.centerx < crate_rect.centerx:
+                                crate.pos[0] += abs(player_horizontal_movement) * 2  # Move crate right
+                        elif player_horizontal_movement < 0:  # Player moving left
+                            # Check if player is on the right side of crate
+                            if player_rect.centerx > crate_rect.centerx:
+                                crate.pos[0] -= abs(player_horizontal_movement) * 2  # Move crate left
                 
+                # Update crate with gravity (but no movement input)
                 if not crate.teleported_this_frame:
-                    crate.update(self.tilemap, push_force)
+                    crate.update(self.tilemap, movement=(0, 0))
                     # Check portal teleport for crates
                     if self.check_portal_teleport(crate):
                         crate.teleported_this_frame = True
                 else:
                     crate.teleported_this_frame = False
-                crate.render(self.display, offset=render_scroll)
             
-            # Update player
+            # Update player (with crates as colliders for collision detection)
             if not self.dead:
                 if not self.player.teleported_this_frame:
-                    # Pass crates as additional colliders so player can stand on and collide with them
                     self.player.update(self.tilemap, (self.movement[1] - self.movement[0], 0), additional_colliders=self.crates)
                     # Check portal teleport for player
                     if self.check_portal_teleport(self.player):
                         self.player.teleported_this_frame = True
                 else:
                     self.player.teleported_this_frame = False
+            
+            # Render crates
+            for crate in self.crates:
+                crate.render(self.display, offset=render_scroll)
+            
+            # Render player
+            if not self.dead:
                 self.player.render(self.display, offset=render_scroll)
             
             # Render game elements

@@ -48,13 +48,18 @@ class PhysicsEntity:
                 self.pos[0] = entity_rect.x
         
         # Check collisions with additional colliders (like crates) for horizontal movement
+        # Crates don't block horizontal movement - player passes through sides
         if additional_colliders:
             entity_rect = self.rect()
             for collider in additional_colliders:
                 if collider == self:  # Don't collide with self
                     continue
+                # Skip horizontal collision with crates - player can pass through sides
+                if hasattr(self, 'type') and self.type == 'player' and hasattr(collider, 'type') and collider.type == 'crate':
+                    continue
                 collider_rect = collider.rect()
                 if entity_rect.colliderect(collider_rect):
+                    # Normal collision handling for non-crates
                     if frame_movement[0] > 0:
                         entity_rect.right = collider_rect.left
                         self.collisions['right'] = True
@@ -83,13 +88,25 @@ class PhysicsEntity:
                     continue
                 collider_rect = collider.rect()
                 if entity_rect.colliderect(collider_rect):
-                    if frame_movement[1] > 0:
-                        entity_rect.bottom = collider_rect.top
-                        self.collisions['down'] = True
-                    if frame_movement[1] < 0:
-                        entity_rect.top = collider_rect.bottom
-                        self.collisions['up'] = True
-                    self.pos[1] = entity_rect.y
+                    # For crates, only check top edge collision (when player is landing from above)
+                    if hasattr(self, 'type') and self.type == 'player' and hasattr(collider, 'type') and collider.type == 'crate':
+                        # Only handle top edge - player landing on crate (moving down)
+                        if frame_movement[1] > 0:  # Player moving down
+                            # Check if player is above the crate (player's bottom should be at crate's top)
+                            if entity_rect.bottom <= collider_rect.top + 5:  # Small tolerance for landing
+                                entity_rect.bottom = collider_rect.top
+                                self.collisions['down'] = True
+                                self.pos[1] = entity_rect.y
+                        # Don't handle bottom collision (player can pass through bottom)
+                    else:
+                        # Normal collision handling for non-crates
+                        if frame_movement[1] > 0:
+                            entity_rect.bottom = collider_rect.top
+                            self.collisions['down'] = True
+                        if frame_movement[1] < 0:
+                            entity_rect.top = collider_rect.bottom
+                            self.collisions['up'] = True
+                        self.pos[1] = entity_rect.y
                 
         if movement[0] > 0:
             self.flip = False
@@ -180,13 +197,18 @@ class Player(PhysicsEntity):
 
 class Crate(PhysicsEntity):
     def __init__(self, game, pos, size=(16, 16)):
+        # Use the actual box image size for the collision box if available
+        if hasattr(game, 'assets') and 'box' in game.assets:
+            box_img = game.assets['box']
+            # Use the actual image dimensions for the collision box
+            size = (box_img.get_width(), box_img.get_height())
         super().__init__(game, 'crate', pos, size)
         self.being_pushed = False
         
     def update(self, tilemap, movement=(0, 0)):
         super().update(tilemap, movement=movement)
         
-        # Crates have friction
+        # Crates have friction (gravity is handled by PhysicsEntity parent class)
         if self.velocity[0] > 0:
             self.velocity[0] = max(self.velocity[0] - 0.15, 0)
         else:
