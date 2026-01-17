@@ -73,6 +73,8 @@ class Game:
         self.player_portal = Portal(self, size=64)
         self.cursor_portal = Portal(self, size=64)
         self.mouse_pos = [0, 0]
+        self.portal_mode = False  # Track if shift is held (portal mode active)
+        self.current_portal_color = None  # 'blue' or 'orange' when locked
         
         # Game elements
         self.crates = []
@@ -84,6 +86,10 @@ class Game:
         self.keys = []  # List of key positions (offgrid tiles)
         self.doors = []  # List of door positions (offgrid tiles)
         self.has_key = False  # Track if player has collected a key
+        
+        # Key system
+        self.has_key = False  # Whether player has collected the key
+        self.room_has_key = False  # Whether the current room has a key
         
         self.level = 0
         self.load_level(self.level)
@@ -98,15 +104,26 @@ class Game:
         self.transition_progress = 0  # 0 to 1
         self.transition_duration = 60  # frames for fade in + out
         
-    def load_level(self, map_id):
+    def load_level(self, map_id_or_path):
         # Get the game directory
         game_dir = os.path.dirname(os.path.abspath(__file__))
-        map_path = os.path.join(game_dir, 'data', 'maps', str(map_id) + '.json')
+        # If map_id_or_path is a number or string that's all digits, treat it as map_id
+        # Otherwise, treat it as a full path
+        if isinstance(map_id_or_path, int):
+            map_path = os.path.join(game_dir, 'data', 'maps', str(map_id_or_path) + '.json')
+        elif isinstance(map_id_or_path, str) and map_id_or_path.isdigit():
+            map_path = os.path.join(game_dir, 'data', 'maps', map_id_or_path + '.json')
+        else:
+            # It's already a path
+            map_path = map_id_or_path
+        
         self.tilemap.load(map_path)
         
         # Reset portals
         self.player_portal.unlock()
         self.cursor_portal.unlock()
+        self.portal_mode = False
+        self.current_portal_color = None
         
         # Extract spawners
         self.crates = []
@@ -118,6 +135,23 @@ class Game:
         self.keys = []  # List of key positions (offgrid tiles)
         self.doors = []  # List of door positions (offgrid tiles)
         self.has_key = False  # Reset key collection status
+        
+        # Reset key system
+        self.has_key = False
+        self.room_has_key = False
+        
+        # Check if room has a key (in tilemap or offgrid)
+        for loc in self.tilemap.tilemap:
+            tile = self.tilemap.tilemap[loc]
+            if tile['type'] == 'key':
+                self.room_has_key = True
+                break
+        
+        if not self.room_has_key:
+            for tile in self.tilemap.offgrid_tiles:
+                if tile['type'] == 'key':
+                    self.room_has_key = True
+                    break
         
         for spawner in self.tilemap.extract([('spawners', 0), ('spawners', 1), ('spawners', 2), 
                                              ('spawners', 3), ('spawners', 6), ('spawners', 7)]):
@@ -365,6 +399,69 @@ class Game:
                             self.dead = 1
                             break
             
+            # Check key collection
+            if not self.dead and not self.transition_active and not self.has_key:
+                player_rect = self.player.rect()
+                # Check key tiles in tilemap
+                for loc in list(self.tilemap.tilemap.keys()):
+                    tile = self.tilemap.tilemap[loc]
+                    if tile['type'] == 'key':
+                        tile_x = tile['pos'][0] * self.tilemap.tile_size
+                        tile_y = tile['pos'][1] * self.tilemap.tile_size
+                        # Key is 48x48, but tile size is 16x16, so we need to check the actual key size
+                        key_rect = pygame.Rect(tile_x, tile_y, 48, 48)
+                        if player_rect.colliderect(key_rect):
+                            # Collect the key
+                            self.has_key = True
+                            # Remove key from tilemap
+                            del self.tilemap.tilemap[loc]
+                            break
+                
+                # Check key tiles in offgrid_tiles
+                if not self.has_key:
+                    for tile in self.tilemap.offgrid_tiles[:]:  # Use slice copy to safely remove during iteration
+                        if tile['type'] == 'key':
+                            key_rect = pygame.Rect(tile['pos'][0], tile['pos'][1], 48, 48)
+                            if player_rect.colliderect(key_rect):
+                                # Collect the key
+                                self.has_key = True
+                                # Remove key from offgrid_tiles
+                                self.tilemap.offgrid_tiles.remove(tile)
+                                break
+            
+            # Check door collisions
+            if not self.dead and not self.transition_active:
+                player_rect = self.player.rect()
+                # Check if door can be used (no key required OR key collected)
+                can_use_door = not self.room_has_key or self.has_key
+                
+                if can_use_door:
+                    # Check door tiles in tilemap
+                    for loc in self.tilemap.tilemap:
+                        tile = self.tilemap.tilemap[loc]
+                        if tile['type'] == 'door':
+                            tile_x = tile['pos'][0] * self.tilemap.tile_size
+                            tile_y = tile['pos'][1] * self.tilemap.tile_size
+                            # Door is 48x48, but tile size is 16x16, so we need to check the actual door size
+                            door_rect = pygame.Rect(tile_x, tile_y, 48, 48)
+                            if player_rect.colliderect(door_rect):
+                                # Load levelselect.json
+                                game_dir = os.path.dirname(os.path.abspath(__file__))
+                                levelselect_path = os.path.join(game_dir, 'data', 'maps', 'levelselect.json')
+                                self.load_level(levelselect_path)
+                                break
+                    
+                    # Check door tiles in offgrid_tiles
+                    for tile in self.tilemap.offgrid_tiles:
+                        if tile['type'] == 'door':
+                            door_rect = pygame.Rect(tile['pos'][0], tile['pos'][1], 48, 48)
+                            if player_rect.colliderect(door_rect):
+                                # Load levelselect.json
+                                game_dir = os.path.dirname(os.path.abspath(__file__))
+                                levelselect_path = os.path.join(game_dir, 'data', 'maps', 'levelselect.json')
+                                self.load_level(levelselect_path)
+                                break
+
             # Check spring_horizontal (horizontal launcher) collisions
             if not self.dead and not self.transition_active:
                 player_rect = self.player.rect()
@@ -534,7 +631,7 @@ class Game:
                 if self.exit_open and exit_rect.colliderect(self.player.rect()):
                     self.won = True
             
-            # Render portals
+            # Render portals - always show both portals (squares around player and cursor)
             self.player_portal.render(self.display, offset=render_scroll)
             # Only render cursor portal if it's not in a noportalzone and not fully encompassed by solid tiles
             if not cursor_portal_in_noportalzone and not cursor_portal_encompassed_by_solid:
@@ -556,29 +653,47 @@ class Game:
                     if event.key == pygame.K_r:
                         # Restart level
                         self.load_level(self.level)
+                    # Enter portal mode when shift is pressed - automatically enters blue mode
+                    # Only if cursor is not in a blocked zone
+                    if event.key == pygame.K_LSHIFT or event.key == pygame.K_RSHIFT:
+                        if not portal_placement_blocked:
+                            self.portal_mode = True
+                            # Automatically lock portals in blue mode
+                            self.player_portal.lock('left')  # 'left' = blue
+                            self.cursor_portal.lock('left')
+                            self.current_portal_color = 'blue'
                 if event.type == pygame.KEYUP:
                     if event.key == pygame.K_LEFT or event.key == pygame.K_a:
                         self.movement[0] = False
                     if event.key == pygame.K_RIGHT or event.key == pygame.K_d:
                         self.movement[1] = False
+                    # Exit portal mode when shift is released
+                    if event.key == pygame.K_LSHIFT or event.key == pygame.K_RSHIFT:
+                        self.portal_mode = False
+                        # Unlock portals when exiting portal mode
+                        self.player_portal.unlock()
+                        self.cursor_portal.unlock()
+                        self.current_portal_color = None
                 if event.type == pygame.MOUSEBUTTONDOWN:
-                    # Block portal placement if cursor or cursor portal is over noportalzone
-                    if portal_placement_blocked:
-                        pass  # Do nothing, portal placement is disabled
-                    elif event.button == 1:  # Left click
-                        if not self.player_portal.locked:
-                            self.player_portal.lock('left')
-                            self.cursor_portal.lock('left')
-                        else:
-                            self.player_portal.unlock()
-                            self.cursor_portal.unlock()
-                    elif event.button == 3:  # Right click
-                        if not self.player_portal.locked:
-                            self.player_portal.lock('right')
-                            self.cursor_portal.lock('right')
-                        else:
-                            self.player_portal.unlock()
-                            self.cursor_portal.unlock()
+                    # Only handle portal color cycling if in portal mode (shift held)
+                    if self.portal_mode:
+                        # Block portal placement if cursor or cursor portal is over noportalzone
+                        if portal_placement_blocked:
+                            pass  # Do nothing, portal placement is disabled
+                        elif event.button == 1:  # Left click - switch to blue portal (only if in orange mode)
+                            if self.current_portal_color == 'orange':
+                                self.player_portal.unlock()
+                                self.cursor_portal.unlock()
+                                self.player_portal.lock('left')  # 'left' = blue
+                                self.cursor_portal.lock('left')
+                                self.current_portal_color = 'blue'
+                        elif event.button == 3:  # Right click - switch to orange portal
+                            if self.current_portal_color == 'blue':
+                                self.player_portal.unlock()
+                                self.cursor_portal.unlock()
+                                self.player_portal.lock('right')  # 'right' = orange
+                                self.cursor_portal.lock('right')
+                                self.current_portal_color = 'orange'
             
             # Update transition
             if self.transition_active:
@@ -680,5 +795,3 @@ class Game:
             self.clock.tick(60)
 
 Game().run()
-
-
