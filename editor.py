@@ -24,6 +24,7 @@ class Editor:
             'stone': load_images('tiles/stone'),
             'spawners': load_images('tiles/spawners'),
             'box': [load_image('entities/box.png')],  # Box as a single-item list for consistency
+            'spring': [load_image('spring.png', (255, 255, 255))],  # Spring with white colorkey
         }
         
         self.movement = [False, False, False, False]
@@ -56,15 +57,25 @@ class Editor:
             
             self.tilemap.render(self.display, offset=render_scroll)
             
-            # Render boxes (spawners variant 1) from offgrid tiles
+            # Render boxes and springs from offgrid tiles
             for tile in self.tilemap.offgrid_tiles:
-                if tile['type'] == 'spawners' and tile['variant'] == 1:
-                    box_img = self.assets['box'][0]
-                    self.display.blit(box_img, (tile['pos'][0] - render_scroll[0], tile['pos'][1] - render_scroll[1]))
+                if tile['type'] == 'spawners':
+                    if tile['variant'] == 1:  # Box
+                        box_img = self.assets['box'][0]
+                        self.display.blit(box_img, (tile['pos'][0] - render_scroll[0], tile['pos'][1] - render_scroll[1]))
+                    elif tile['variant'] == 3:  # Spring (bottom attached)
+                        spring_img = self.assets['spring'][0].copy()
+                        # Scale to half player size (player is 8x15, so spring ~4x8)
+                        spring_img = pygame.transform.scale(spring_img, (4, 8))
+                        self.display.blit(spring_img, (tile['pos'][0] - render_scroll[0], tile['pos'][1] - render_scroll[1]))
             
-            # Handle box separately since it's a single image, not a list of variants
+            # Handle box and spring separately since they're single images, not lists
             if self.tile_list[self.tile_group] == 'box':
                 current_tile_img = self.assets['box'][0].copy()
+            elif self.tile_list[self.tile_group] == 'spring':
+                current_tile_img = self.assets['spring'][0].copy()
+                # Scale spring image
+                current_tile_img = pygame.transform.scale(current_tile_img, (4, 8))
             else:
                 current_tile_img = self.assets[self.tile_list[self.tile_group]][self.tile_variant].copy()
             current_tile_img.set_alpha(100)
@@ -82,6 +93,9 @@ class Editor:
                 # Box is placed as a spawner variant 1 (crate spawner) in offgrid
                 if self.tile_list[self.tile_group] == 'box':
                     self.tilemap.offgrid_tiles.append({'type': 'spawners', 'variant': 1, 'pos': (tile_pos[0] * self.tilemap.tile_size, tile_pos[1] * self.tilemap.tile_size)})
+                elif self.tile_list[self.tile_group] == 'spring':
+                    # Spring variant 3 (bottom attached, launches upward)
+                    self.tilemap.offgrid_tiles.append({'type': 'spawners', 'variant': 3, 'pos': (tile_pos[0] * self.tilemap.tile_size, tile_pos[1] * self.tilemap.tile_size)})
                 else:
                     self.tilemap.tilemap[str(tile_pos[0]) + ';' + str(tile_pos[1])] = {'type': self.tile_list[self.tile_group], 'variant': self.tile_variant, 'pos': tile_pos}
             if self.right_clicking:
@@ -89,9 +103,15 @@ class Editor:
                 if tile_loc in self.tilemap.tilemap:
                     del self.tilemap.tilemap[tile_loc]
                 for tile in self.tilemap.offgrid_tiles.copy():
-                    # Handle box rendering (spawner variant 1)
-                    if tile['type'] == 'spawners' and tile['variant'] == 1:
-                        tile_img = self.assets['box'][0]
+                    # Handle box and spring rendering
+                    if tile['type'] == 'spawners':
+                        if tile['variant'] == 1:  # Box
+                            tile_img = self.assets['box'][0]
+                        elif tile['variant'] == 3:  # Spring
+                            tile_img = self.assets['spring'][0]
+                            tile_img = pygame.transform.scale(tile_img, (4, 8))
+                        else:
+                            tile_img = self.assets['spawners'][tile['variant']]
                     else:
                         tile_img = self.assets[tile['type']][tile['variant']]
                     tile_r = pygame.Rect(tile['pos'][0] - self.scroll[0], tile['pos'][1] - self.scroll[1], tile_img.get_width(), tile_img.get_height())
@@ -112,23 +132,33 @@ class Editor:
                             # Box is placed as a spawner variant 1 (crate spawner) in offgrid
                             if self.tile_list[self.tile_group] == 'box':
                                 self.tilemap.offgrid_tiles.append({'type': 'spawners', 'variant': 1, 'pos': (mpos[0] + self.scroll[0], mpos[1] + self.scroll[1])})
+                            elif self.tile_list[self.tile_group] == 'spring':
+                                # Spring variant 3 (bottom attached, launches upward)
+                                self.tilemap.offgrid_tiles.append({'type': 'spawners', 'variant': 3, 'pos': (mpos[0] + self.scroll[0], mpos[1] + self.scroll[1])})
                             else:
                                 self.tilemap.offgrid_tiles.append({'type': self.tile_list[self.tile_group], 'variant': self.tile_variant, 'pos': (mpos[0] + self.scroll[0], mpos[1] + self.scroll[1])})
                     if event.button == 3:
                         self.right_clicking = True
                     if self.shift:
-                        if self.tile_list[self.tile_group] != 'box':  # Box has no variants
+                        if self.tile_list[self.tile_group] not in ['box', 'spring']:  # Box and spring have special handling
                             if event.button == 4:
                                 self.tile_variant = (self.tile_variant - 1) % len(self.assets[self.tile_list[self.tile_group]])
                             if event.button == 5:
                                 self.tile_variant = (self.tile_variant + 1) % len(self.assets[self.tile_list[self.tile_group]])
+                        # Spring no longer has variants - removed
                     else:
                         if event.button == 4:
                             self.tile_group = (self.tile_group - 1) % len(self.tile_list)
                             self.tile_variant = 0
+                            # If switching to spring, ensure variant is valid
+                            if self.tile_list[self.tile_group] == 'spring':
+                                self.tile_variant = 0
                         if event.button == 5:
                             self.tile_group = (self.tile_group + 1) % len(self.tile_list)
                             self.tile_variant = 0
+                            # If switching to spring, ensure variant is valid
+                            if self.tile_list[self.tile_group] == 'spring':
+                                self.tile_variant = 0
                 if event.type == pygame.MOUSEBUTTONUP:
                     if event.button == 1:
                         self.clicking = False

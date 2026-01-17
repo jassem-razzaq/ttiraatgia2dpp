@@ -97,6 +97,9 @@ class Tilemap:
 
     def render(self, surf, offset=(0, 0)):
         for tile in self.offgrid_tiles:
+            # Skip rendering spawner variants that are handled elsewhere (boxes=1, springs=3)
+            if tile['type'] == 'spawners' and tile['variant'] in [1, 3]:
+                continue  # These are handled by game/editor rendering
             surf.blit(self.game.assets[tile['type']][tile['variant']], (tile['pos'][0] - offset[0], tile['pos'][1] - offset[1]))
             
         for x in range(offset[0] // self.tile_size, (offset[0] + surf.get_width()) // self.tile_size + 1):

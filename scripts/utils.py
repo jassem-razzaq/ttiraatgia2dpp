@@ -8,10 +8,10 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 GAME_DIR = os.path.dirname(SCRIPT_DIR)
 BASE_IMG_PATH = os.path.join(GAME_DIR, 'data', 'images')
 
-def load_image(path):
+def load_image(path, colorkey=(0, 0, 0)):
     full_path = os.path.join(BASE_IMG_PATH, path)
     img = pygame.image.load(full_path).convert()
-    img.set_colorkey((0, 0, 0))
+    img.set_colorkey(colorkey)
     return img
 
 def load_images(path):

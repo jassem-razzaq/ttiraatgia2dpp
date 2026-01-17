@@ -4,7 +4,7 @@ import math
 import pygame
 
 from scripts.utils import load_image, load_images, Animation
-from scripts.entities import PhysicsEntity, Player, Crate
+from scripts.entities import PhysicsEntity, Player, Crate, Spring
 from scripts.tilemap import Tilemap
 from scripts.portal import Portal
 
@@ -77,8 +77,7 @@ class Game:
         self.exit_open = False
         
         for spawner in self.tilemap.extract([('spawners', 0), ('spawners', 1), ('spawners', 2), 
-                                             ('spawners', 3), ('spawners', 4), ('spawners', 5), 
-                                             ('spawners', 6), ('spawners', 7)]):
+                                             ('spawners', 3), ('spawners', 6), ('spawners', 7)]):
             variant = spawner['variant']
             pos = spawner['pos']
             
@@ -90,12 +89,8 @@ class Game:
                 self.crates.append(Crate(self, pos))
             elif variant == 2:  # Button
                 self.buttons.append({'pos': pos, 'size': (16, 8), 'pressed': False})
-            elif variant == 3:  # Spring (vertical)
-                self.springs.append({'pos': pos, 'size': (16, 8), 'direction': 'up', 'power': 5})
-            elif variant == 4:  # Spring (horizontal right)
-                self.springs.append({'pos': pos, 'size': (16, 8), 'direction': 'right', 'power': 5})
-            elif variant == 5:  # Spring (horizontal left)
-                self.springs.append({'pos': pos, 'size': (16, 8), 'direction': 'left', 'power': 5})
+            elif variant == 3:  # Spring (bottom attached, launches upward)
+                self.springs.append(Spring(self, pos))
             elif variant == 6:  # Laser
                 self.lasers.append({'pos': pos, 'size': (16, 240), 'active': True})
             elif variant == 7:  # Exit door
@@ -169,18 +164,36 @@ class Game:
             # Check if all buttons are pressed (open exit)
             self.exit_open = all(button['pressed'] for button in self.buttons) if self.buttons else False
             
-            # Check spring collisions
+            # Update springs (check for pushing before updating)
             for spring in self.springs:
-                spring_rect = pygame.Rect(spring['pos'][0], spring['pos'][1], spring['size'][0], spring['size'][1])
+                # Check if player is pushing the spring horizontally
+                if not self.dead:
+                    player_rect = self.player.rect()
+                    spring_rect = spring.rect()
+                    
+                    # Check if player is colliding with spring and moving horizontally
+                    if player_rect.colliderect(spring_rect):
+                        player_horizontal_movement = (self.movement[1] - self.movement[0])
+                        
+                        # Simple pushing: if player is moving left/right and colliding, move spring directly
+                        if player_horizontal_movement > 0:  # Player moving right
+                            # Check if player is on the left side of spring
+                            if player_rect.centerx < spring_rect.centerx:
+                                spring.pos[0] += abs(player_horizontal_movement) * 2  # Move spring right
+                        elif player_horizontal_movement < 0:  # Player moving left
+                            # Check if player is on the right side of spring
+                            if player_rect.centerx > spring_rect.centerx:
+                                spring.pos[0] -= abs(player_horizontal_movement) * 2  # Move spring left
                 
-                # Check player
-                if spring_rect.colliderect(self.player.rect()):
-                    if spring['direction'] == 'up':
-                        self.player.velocity[1] = -spring['power']
-                    elif spring['direction'] == 'right':
-                        self.player.velocity[0] = spring['power']
-                    elif spring['direction'] == 'left':
-                        self.player.velocity[0] = -spring['power']
+                # Update spring with physics and collision detection
+                entities_to_check = [self.player] + self.crates
+                if not spring.teleported_this_frame:
+                    spring.update(self.tilemap, entities_to_check)
+                    # Check portal teleport for springs
+                    if self.check_portal_teleport(spring):
+                        spring.teleported_this_frame = True
+                else:
+                    spring.teleported_this_frame = False
             
             # Check laser collisions
             for laser in self.lasers:
@@ -257,10 +270,7 @@ class Game:
             
             # Springs
             for spring in self.springs:
-                spring_rect = pygame.Rect(spring['pos'][0] - render_scroll[0], 
-                                        spring['pos'][1] - render_scroll[1], 
-                                        spring['size'][0], spring['size'][1])
-                pygame.draw.rect(self.display, (255, 255, 0), spring_rect)
+                spring.render(self.display, offset=render_scroll)
             
             # Lasers
             for laser in self.lasers:
