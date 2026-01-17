@@ -19,11 +19,17 @@ class Editor:
 
         self.clock = pygame.time.Clock()
         
+        # Load noportalzone image and make it transparent
+        noportalzone_large_img = load_image('tiles/noportalzone.png')
+        noportalzone_large_img.set_alpha(128)  # Make it semi-transparent
+        noportalzone_img = pygame.transform.scale(noportalzone_large_img, (16, 16))
+        
         self.assets = {
             'decor': load_images('tiles/decor'),
             'grass': load_images('tiles/grass'),
             'large_decor': load_images('tiles/large_decor'),
             'stone': load_images('tiles/stone'),
+            'noportalzone': [noportalzone_img],  # Single-item list for consistency
             'spawners': load_images('tiles/spawners'),
             'box': [load_image('entities/box.png')],  # Box as a single-item list for consistency
             'spring': [load_image('spring.png', (255, 255, 255))],  # Spring with white colorkey
@@ -143,24 +149,24 @@ class Editor:
                     if event.button == 3:
                         self.right_clicking = True
                     if self.shift:
-                        if self.tile_list[self.tile_group] not in ['box', 'spring']:  # Box and spring have special handling
+                        if self.tile_list[self.tile_group] not in ['box', 'spring', 'noportalzone']:  # Box, spring, and noportalzone have special handling
                             if event.button == 4:
                                 self.tile_variant = (self.tile_variant - 1) % len(self.assets[self.tile_list[self.tile_group]])
                             if event.button == 5:
                                 self.tile_variant = (self.tile_variant + 1) % len(self.assets[self.tile_list[self.tile_group]])
-                        # Spring no longer has variants - removed
+                        # Spring and noportalzone no longer have variants - removed
                     else:
                         if event.button == 4:
                             self.tile_group = (self.tile_group - 1) % len(self.tile_list)
                             self.tile_variant = 0
-                            # If switching to spring, ensure variant is valid
-                            if self.tile_list[self.tile_group] == 'spring':
+                            # If switching to spring or noportalzone, ensure variant is valid
+                            if self.tile_list[self.tile_group] in ['spring', 'noportalzone']:
                                 self.tile_variant = 0
                         if event.button == 5:
                             self.tile_group = (self.tile_group + 1) % len(self.tile_list)
                             self.tile_variant = 0
-                            # If switching to spring, ensure variant is valid
-                            if self.tile_list[self.tile_group] == 'spring':
+                            # If switching to spring or noportalzone, ensure variant is valid
+                            if self.tile_list[self.tile_group] in ['spring', 'noportalzone']:
                                 self.tile_variant = 0
                 if event.type == pygame.MOUSEBUTTONUP:
                     if event.button == 1:

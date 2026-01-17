@@ -21,11 +21,17 @@ class Game:
         
         self.movement = [False, False]
         
+        # Load noportalzone image and make it transparent
+        noportalzone_large_img = load_image('tiles/noportalzone.png')
+        noportalzone_large_img.set_alpha(128)  # Make it semi-transparent
+        noportalzone_img = pygame.transform.scale(noportalzone_large_img, (16, 16))
+        
         self.assets = {
             'decor': load_images('tiles/decor'),
             'grass': load_images('tiles/grass'),
             'large_decor': load_images('tiles/large_decor'),
             'stone': load_images('tiles/stone'),
+            'noportalzone': [noportalzone_img],  # Single-item list for consistency
             'player/idle': Animation(load_images('entities/player/idle'), img_dur=6),
             'player/run': Animation(load_images('entities/player/run'), img_dur=4),
             'player/jump': Animation(load_images('entities/player/jump')),
@@ -100,6 +106,14 @@ class Game:
         self.dead = 0
         self.won = False
     
+    def is_in_noportalzone(self, pos):
+        """Check if a position is over a noportalzone tile"""
+        tile_loc = str(int(pos[0] // self.tilemap.tile_size)) + ';' + str(int(pos[1] // self.tilemap.tile_size))
+        if tile_loc in self.tilemap.tilemap:
+            if self.tilemap.tilemap[tile_loc]['type'] == 'noportalzone':
+                return True
+        return False
+    
     def check_portal_teleport(self, entity):
         """Check if entity should be teleported through portals"""
         if not hasattr(entity, 'last_pos'):
@@ -151,6 +165,13 @@ class Game:
             # Update portals
             self.player_portal.update(self.player.rect().center)
             self.cursor_portal.update(self.mouse_pos)
+            
+            # Check if cursor or cursor portal is over a noportalzone tile
+            cursor_in_noportalzone = self.is_in_noportalzone(self.mouse_pos)
+            cursor_portal_center = (self.cursor_portal.pos[0] + self.cursor_portal.size // 2, 
+                                    self.cursor_portal.pos[1] + self.cursor_portal.size // 2)
+            cursor_portal_in_noportalzone = self.is_in_noportalzone(cursor_portal_center)
+            portal_placement_blocked = cursor_in_noportalzone or cursor_portal_in_noportalzone
             
             # Check button presses
             for button in self.buttons:
@@ -316,7 +337,10 @@ class Game:
                     if event.key == pygame.K_RIGHT or event.key == pygame.K_d:
                         self.movement[1] = False
                 if event.type == pygame.MOUSEBUTTONDOWN:
-                    if event.button == 1:  # Left click
+                    # Block portal placement if cursor or cursor portal is over noportalzone
+                    if portal_placement_blocked:
+                        pass  # Do nothing, portal placement is disabled
+                    elif event.button == 1:  # Left click
                         if not self.player_portal.locked:
                             self.player_portal.lock('left')
                             self.cursor_portal.lock('left')
