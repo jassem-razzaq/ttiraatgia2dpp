@@ -225,11 +225,15 @@ class Portal:
                 # Clamp to ensure entity stays within portal bounds
                 entity.pos[0] = max(exit_rect.left, min(exit_rect.right - entity.size[0], entity.pos[0]))
                 entity.pos[1] = exit_rect.bottom - entity.size[1] - offset
-                # Entering from right (moving right), exit going down
-                # Take horizontal right velocity, convert to vertical down velocity
-                speed = abs(old_velocity[0]) if old_velocity[0] > 0 else 0
+                # Entering from right (moving right), exit going UP from bottom edge
+                # Take horizontal velocity magnitude, convert to vertical UP velocity (preserve momentum)
+                # Use the magnitude of horizontal velocity (whether left or right) to determine launch speed
+                horizontal_speed = abs(old_velocity[0])
+                # If no horizontal velocity, use a minimum launch speed based on vertical velocity or default
+                if horizontal_speed == 0:
+                    horizontal_speed = abs(old_velocity[1]) if abs(old_velocity[1]) > 0 else 2.0  # Fallback to vertical or minimum
                 entity.velocity[0] = 0
-                entity.velocity[1] = speed  # Downward (positive Y)
+                entity.velocity[1] = -horizontal_speed  # Upward (negative Y) - launch upward with conserved momentum
             elif exit_edge == 'bottom':  # Exiting bottom edge, enter from RIGHT edge (inside, near right)
                 entity.pos[0] = exit_rect.right - entity.size[0] - offset
                 # Use relative_position to place entity at same position along the vertical edge
@@ -241,28 +245,34 @@ class Portal:
                 speed = abs(old_velocity[1]) if old_velocity[1] > 0 else 0
                 entity.velocity[0] = -speed  # Leftward (negative X)
                 entity.velocity[1] = 0
-            elif exit_edge == 'left':  # Exiting left edge, enter from top edge (inside, near top)
+            elif exit_edge == 'left':  # Exiting left edge (entering from left), exit from top edge going downward
                 # Use relative_position to place entity at same position along the horizontal edge
                 entity.pos[0] = exit_rect.left + (relative_position * exit_rect.width) - entity.size[0] // 2
                 # Clamp to ensure entity stays within portal bounds
                 entity.pos[0] = max(exit_rect.left, min(exit_rect.right - entity.size[0], entity.pos[0]))
                 entity.pos[1] = exit_rect.top + offset
-                # Entering from left (moving left), exit going up
-                # Take horizontal left velocity, convert to vertical up velocity
-                speed = abs(old_velocity[0]) if old_velocity[0] < 0 else 0
+                # Entering from left (moving left), exit going DOWN from top edge
+                # Take horizontal left velocity magnitude, convert to vertical DOWN velocity (preserve momentum)
+                horizontal_speed = abs(old_velocity[0])
+                # If no horizontal velocity, use vertical velocity or minimum
+                if horizontal_speed == 0:
+                    horizontal_speed = abs(old_velocity[1]) if abs(old_velocity[1]) > 0 else 2.0
                 entity.velocity[0] = 0
-                entity.velocity[1] = -speed  # Upward (negative Y)
-            elif exit_edge == 'top':  # Exiting top edge, enter from LEFT edge (inside, near left)
-                entity.pos[0] = exit_rect.left + offset
-                # Use relative_position to place entity at same position along the vertical edge
-                entity.pos[1] = exit_rect.top + (relative_position * exit_rect.height) - entity.size[1] // 2
+                entity.velocity[1] = horizontal_speed  # Downward (positive Y) - launch downward with conserved momentum
+            elif exit_edge == 'top':  # Exiting top edge (entering from top), exit from top edge going downward
+                # Use relative_position to place entity at same position along the horizontal edge
+                entity.pos[0] = exit_rect.left + (relative_position * exit_rect.width) - entity.size[0] // 2
                 # Clamp to ensure entity stays within portal bounds
-                entity.pos[1] = max(exit_rect.top, min(exit_rect.bottom - entity.size[1], entity.pos[1]))
-                # Entering from top (moving up), exit going right from left edge
-                # Take vertical up velocity, convert to horizontal right velocity
-                speed = abs(old_velocity[1]) if old_velocity[1] < 0 else 0
-                entity.velocity[0] = speed  # Rightward (positive X)
-                entity.velocity[1] = 0
+                entity.pos[0] = max(exit_rect.left, min(exit_rect.right - entity.size[0], entity.pos[0]))
+                entity.pos[1] = exit_rect.top + offset
+                # Entering from top (moving up), exit going DOWN from top edge
+                # Take vertical up velocity magnitude, convert to vertical DOWN velocity (preserve momentum)
+                vertical_speed = abs(old_velocity[1])
+                # If no vertical velocity, use horizontal velocity or minimum
+                if vertical_speed == 0:
+                    vertical_speed = abs(old_velocity[0]) if abs(old_velocity[0]) > 0 else 2.0
+                entity.velocity[0] = 0
+                entity.velocity[1] = vertical_speed  # Downward (positive Y) - launch downward with conserved momentum
         
         # After teleportation, update last_pos to be outside the exit portal
         # This prevents immediate re-teleportation detection
@@ -281,10 +291,10 @@ class Portal:
                 entity.last_pos[1] = exit_rect.bottom + 1
             elif exit_edge == 'bottom':  # Entered from right
                 entity.last_pos[0] = exit_rect.right + 1
-            elif exit_edge == 'left':  # Entered from top
+            elif exit_edge == 'left':  # Entered from left, exits from top going down
                 entity.last_pos[1] = exit_rect.top - entity.size[1] - 1
-            elif exit_edge == 'top':  # Entered from left
-                entity.last_pos[0] = exit_rect.left - entity.size[0] - 1
+            elif exit_edge == 'top':  # Entered from top, exits from top going down
+                entity.last_pos[1] = exit_rect.top - entity.size[1] - 1
         
         return True
     

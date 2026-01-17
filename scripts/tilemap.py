@@ -68,6 +68,11 @@ class Tilemap:
         self.tilemap = map_data['tilemap']
         self.tile_size = map_data['tile_size']
         self.offgrid_tiles = map_data['offgrid']
+        
+        # Convert old red_box tiles to spring_horizontal for backwards compatibility
+        for loc in self.tilemap:
+            if self.tilemap[loc]['type'] == 'red_box':
+                self.tilemap[loc]['type'] = 'spring_horizontal'
     
     def solid_check(self, pos):
         tile_loc = str(int(pos[0] // self.tile_size)) + ';' + str(int(pos[1] // self.tile_size))
@@ -131,5 +136,12 @@ class Tilemap:
                             spike_pos = (tile_x, tile_y + 8)  # Default bottom half
                         
                         surf.blit(spike_img, spike_pos)
+                    elif tile['type'] == 'spring_horizontal' or tile['type'] == 'red_box':
+                        # Render spring_horizontal tile (also handle old red_box tiles for backwards compatibility)
+                        spring_horizontal_img = self.game.assets['spring_horizontal'][0]
+                        surf.blit(spring_horizontal_img, (tile['pos'][0] * self.tile_size - offset[0], tile['pos'][1] * self.tile_size - offset[1]))
+                        # Convert old red_box to spring_horizontal
+                        if tile['type'] == 'red_box':
+                            tile['type'] = 'spring_horizontal'
                     else:
                         surf.blit(self.game.assets[tile['type']][tile['variant']], (tile['pos'][0] * self.tile_size - offset[0], tile['pos'][1] * self.tile_size - offset[1]))

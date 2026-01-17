@@ -241,21 +241,19 @@ class Spring:
         self.pos = list(pos)
         self.velocity = [0, 0]  # For physics-based pushing
         
-        # Load and scale spring image (half player size - player is 8x15, so spring ~4x8)
-        from scripts.utils import load_image
-        spring_img = load_image('spring.png', colorkey=(255, 255, 255))  # White colorkey
-        # Scale to approximately half player size
-        self.base_image = pygame.transform.scale(spring_img, (4, 8))
+        # Load spring image as-is without scaling, with alpha transparency
+        import os
+        game_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        spring_path = os.path.join(game_dir, 'data', 'images', 'spring.png')
+        spring_img = pygame.image.load(spring_path).convert_alpha()  # Preserve alpha channel
+        # Use original image size
+        self.base_image = spring_img
         self.image = self.base_image.copy()
         
-        # Size for collision detection - make hitbox larger to catch fast-moving entities
-        # Visual size is 4x8, but collision box is larger (8x12) to prevent fast entities from passing through
-        self.size = (8, 12)  # Wider and taller collision box
+        # Size for collision detection - use actual image size
+        self.size = (spring_img.get_width(), spring_img.get_height())
         
-        # Animation state
-        self.animation_frame = 0  # 0 = normal, >0 = animating
-        self.animation_timer = 0
-        self.scale = 1.0  # Current scale for animation
+        # No animation state - removed animations
         
         # Collision state - track which entities are currently touching and when they were launched
         self.touching_entities = set()  # Entities currently touching the spring
@@ -442,43 +440,20 @@ class Spring:
                             self.cooldown_timer = 300
                             self.is_active = False
                             
-                            # Start animation
-                            self.animation_timer = 0
-                            self.animation_frame = 0
-                            self.launched_entities[entity_id] = self.animation_timer
+                            # No animation - removed
+                            self.launched_entities[entity_id] = 0
         
         # Update touching entities for next frame
         self.touching_entities = currently_touching
         
-        # Update animation
-        if self.animation_timer >= 0:
-            self.animation_timer += 1
-            
-            # Animation: shrink (0-10 frames), then expand (10-20 frames)
-            if self.animation_timer < 10:
-                # Shrinking phase
-                self.scale = 1.0 - (self.animation_timer / 10.0) * 0.5  # Shrink to 50%
-            elif self.animation_timer < 20:
-                # Expanding phase
-                progress = (self.animation_timer - 10) / 10.0
-                self.scale = 0.5 + progress * 0.5  # Expand back to 100%
-            else:
-                # Animation complete
-                self.scale = 1.0
-                self.animation_timer = -1
+        # No animation update - removed animations
     
     def render(self, surf, offset=(0, 0)):
-        """Render the spring with current animation scale (no rotation, just scaled)"""
+        """Render the spring without any animation or effects"""
         spring_img = self.base_image.copy()
         
-        # Scale based on animation
-        if self.scale != 1.0:
-            new_size = (int(spring_img.get_width() * self.scale), int(spring_img.get_height() * self.scale))
-            if new_size[0] > 0 and new_size[1] > 0:
-                spring_img = pygame.transform.scale(spring_img, new_size)
-        
-        # Calculate position to center scaled image
-        render_x = self.pos[0] - offset[0] + (self.size[0] - spring_img.get_width()) // 2
-        render_y = self.pos[1] - offset[1] + (self.size[1] - spring_img.get_height()) // 2
+        # Render at position without any scaling or animation
+        render_x = self.pos[0] - offset[0]
+        render_y = self.pos[1] - offset[1]
         
         surf.blit(spring_img, (render_x, render_y))
