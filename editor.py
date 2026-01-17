@@ -25,10 +25,11 @@ class Editor:
         noportalzone_large_img.set_alpha(128)  # Make it semi-transparent
         noportalzone_img = pygame.transform.scale(noportalzone_large_img, (16, 16))
 
-        door_large_img = load_image('tiles/door.png')
-        door = pygame.transform.scale(door_large_img, (48, 48))
+        # Load door image as-is without any transformation
+        game_dir = os.path.dirname(os.path.abspath(__file__))
+        door = pygame.image.load(os.path.join(game_dir, 'data', 'images', 'tiles', 'door.png')).convert_alpha()
 
-        key_large_img = load_image('tiles/key.png')
+        key_large_img = pygame.image.load(os.path.join(game_dir, 'data', 'images', 'tiles', 'key.png')).convert_alpha()
         key = pygame.transform.scale(key_large_img, (48, 48))
 
         # Load spikes image and scale to full width, half height (16x8 for 16x16 tile)
@@ -36,7 +37,6 @@ class Editor:
         spikes_img = pygame.transform.scale(spikes_large_img, (16, 8))
         
         # Load spring_horizontal image for horizontal launcher tile
-        game_dir = os.path.dirname(os.path.abspath(__file__))
         spring_horizontal_img = pygame.image.load(os.path.join(game_dir, 'data', 'images', 'spring_horizontal.png')).convert_alpha()
         
         # Load spring with alpha transparency
