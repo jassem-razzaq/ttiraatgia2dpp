@@ -295,12 +295,8 @@ class Spring:
         """
         self.last_pos = self.pos.copy()
         
-        # Update cooldown timer
-        if self.cooldown_timer > 0:
-            self.cooldown_timer -= 1
-            self.is_active = False  # Spring is inactive during cooldown
-        else:
-            self.is_active = True  # Spring is active and can bounce
+        # Cooldown removed - spring is always active
+        self.is_active = True
         
         # Apply gravity (like other entities)
         self.velocity[1] = min(10, self.velocity[1] + 0.1)
@@ -318,12 +314,15 @@ class Spring:
         spring_rect = self.rect()
         for rect in tilemap.physics_rects_around(self.pos):
             if spring_rect.colliderect(rect):
+                # Only handle horizontal collision if we're moving horizontally
                 if self.velocity[0] > 0:
                     spring_rect.right = rect.left
-                if self.velocity[0] < 0:
+                    self.pos[0] = spring_rect.x
+                    self.velocity[0] = 0
+                elif self.velocity[0] < 0:
                     spring_rect.left = rect.right
-                self.pos[0] = spring_rect.x
-                self.velocity[0] = 0
+                    self.pos[0] = spring_rect.x
+                    self.velocity[0] = 0
         
         # Move spring vertically
         self.pos[1] += self.velocity[1]
@@ -332,13 +331,16 @@ class Spring:
         spring_rect = self.rect()
         for rect in tilemap.physics_rects_around(self.pos):
             if spring_rect.colliderect(rect):
+                # Only handle vertical collision based on vertical movement
                 if self.velocity[1] > 0:  # Falling
                     spring_rect.bottom = rect.top
+                    self.pos[1] = spring_rect.y
                     self.velocity[1] = 0
-                if self.velocity[1] < 0:  # Moving up
+                elif self.velocity[1] < 0:  # Moving up
                     spring_rect.top = rect.bottom
+                    self.pos[1] = spring_rect.y
                     self.velocity[1] = 0
-                self.pos[1] = spring_rect.y
+                # If velocity is 0, don't adjust position (spring is resting)
         
         spring_rect = self.rect()
         
@@ -392,10 +394,9 @@ class Spring:
                 
                 # Only launch if:
                 # - Entity just started touching from above (wasn't touching last frame)
-                # - Entity hasn't been bounced yet (until they hit ground)
-                # - Spring is active (not in cooldown)
+                # - Entity is landing on spring (moving downward)
                 # Check if entity is landing on spring (entity bottom touching spring top)
-                if entity_id not in self.touching_entities and entity_id not in self.bounced_entities and self.is_active:
+                if entity_id not in self.touching_entities and entity.velocity[1] >= 0:
                     if hasattr(entity, 'velocity'):
                         # Check if entity is landing on top of spring (moving down)
                         # More lenient check for fast-moving entities
@@ -415,34 +416,20 @@ class Spring:
                             # Use the larger value to catch fast-moving entities
                             impact_velocity = max(velocity_based, position_based)
                             
-                            # Determine launch power based on new logic:
-                            # 1. If entity has a stored bounce height, use it (maintain constant height)
-                            # 2. If impact velocity is HIGH (jumped from above), calculate proportional bounce
-                            # 3. Otherwise, use base bounce power
+                            # Determine launch power based on impact velocity:
+                            # - Higher impact velocity (falling from higher) = higher bounce
+                            # - Base bounce power + velocity multiplier
                             
-                            if entity_id in self.entity_bounce_heights:
-                                # Entity already has a bounce height - maintain it
-                                launch_power = self.entity_bounce_heights[entity_id]
-                            elif impact_velocity >= self.MIN_HIGH_JUMP_VELOCITY:
-                                # High impact - calculate proportional bounce and store it
+                            if impact_velocity >= self.MIN_HIGH_JUMP_VELOCITY:
+                                # High impact - calculate proportional bounce
                                 launch_power = self.BASE_BOUNCE_POWER + impact_velocity * self.HIGH_BOUNCE_MULTIPLIER
                                 launch_power = min(launch_power, self.MAX_BOUNCE_POWER)
-                                # Store this bounce height for future bounces
-                                self.entity_bounce_heights[entity_id] = launch_power
                             else:
-                                # Normal bounce - use base power and store it
+                                # Normal bounce - use base power
                                 launch_power = self.BASE_BOUNCE_POWER
-                                self.entity_bounce_heights[entity_id] = launch_power
                             
                             # Launch entity UP - REPLACE velocity (don't add to existing upward velocity)
                             entity.velocity[1] = -launch_power
-                            
-                            # Mark entity as bounced - they can't be bounced again until they hit ground
-                            self.bounced_entities.add(entity_id)
-                            
-                            # Start cooldown - spring is inactive for 5 seconds (300 frames at 60fps)
-                            self.cooldown_timer = 300
-                            self.is_active = False
                             
                             # No animation - removed
                             self.launched_entities[entity_id] = 0
