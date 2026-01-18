@@ -1,4 +1,4 @@
-# The Time I was a Teleporting Goat in a 2D Puzzle Platformer
+# The Time I Reincarnated as a Teleporting Goat in a 2D Puzzle Platformer
 ![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
 ![Google Gemini](https://img.shields.io/badge/google%20gemini-8E75B2?style=for-the-badge&logo=google%20gemini&logoColor=white)
 
