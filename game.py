@@ -70,6 +70,62 @@ class Game:
             'key': [key],
         }
 
+        # Load audio files
+        audio_dir = os.path.join(game_dir, 'data', 'audio')
+        try:
+            jump_sound_path = os.path.join(audio_dir, 'jump.wav')
+            if os.path.exists(jump_sound_path):
+                self.jump_sound = pygame.mixer.Sound(jump_sound_path)
+            else:
+                self.jump_sound = None
+        except:
+            self.jump_sound = None
+        
+        try:
+            death_sound_path = os.path.join(audio_dir, 'death.wav')
+            if os.path.exists(death_sound_path):
+                self.death_sound = pygame.mixer.Sound(death_sound_path)
+            else:
+                self.death_sound = None
+        except:
+            self.death_sound = None
+        
+        try:
+            key_sound_path = os.path.join(audio_dir, 'key.wav')
+            if os.path.exists(key_sound_path):
+                self.key_sound = pygame.mixer.Sound(key_sound_path)
+            else:
+                self.key_sound = None
+        except:
+            self.key_sound = None
+        
+        try:
+            portal_shift_sound_path = os.path.join(audio_dir, 'portal_shift.wav')
+            if os.path.exists(portal_shift_sound_path):
+                self.portal_shift_sound = pygame.mixer.Sound(portal_shift_sound_path)
+            else:
+                self.portal_shift_sound = None
+        except:
+            self.portal_shift_sound = None
+        
+        try:
+            portal_travel_sound_path = os.path.join(audio_dir, 'portal_travel.wav')
+            if os.path.exists(portal_travel_sound_path):
+                self.portal_travel_sound = pygame.mixer.Sound(portal_travel_sound_path)
+            else:
+                self.portal_travel_sound = None
+        except:
+            self.portal_travel_sound = None
+        
+        try:
+            spring_sound_path = os.path.join(audio_dir, 'spring.wav')
+            if os.path.exists(spring_sound_path):
+                self.spring_sound = pygame.mixer.Sound(spring_sound_path)
+            else:
+                self.spring_sound = None
+        except:
+            self.spring_sound = None
+
         self.player = Player(self, (50, 50), (8, 15))
 
         self.tilemap = Tilemap(self, tile_size=16)
@@ -291,6 +347,9 @@ class Game:
             if collision_result:
                 edge, relative_position = collision_result
                 if self.player_portal.teleport_entity(entity, self.cursor_portal, edge, relative_position):
+                    # Play portal travel sound
+                    if self.portal_travel_sound:
+                        self.portal_travel_sound.play()
                     # last_pos is updated inside teleport_entity to prevent immediate re-teleport
                     return True
 
@@ -299,6 +358,9 @@ class Game:
             if collision_result:
                 edge, relative_position = collision_result
                 if self.cursor_portal.teleport_entity(entity, self.player_portal, edge, relative_position):
+                    # Play portal travel sound
+                    if self.portal_travel_sound:
+                        self.portal_travel_sound.play()
                     # last_pos is updated inside teleport_entity to prevent immediate re-teleport
                     return True
 
@@ -416,6 +478,9 @@ class Game:
                 # Player falls off if they go below the display height (with some margin)
                 if self.player.pos[1] > self.display.get_height() + 100:
                     self.dead = 1
+                    # Play death sound
+                    if self.death_sound:
+                        self.death_sound.play()
 
             # Check spike collisions
             if not self.dead and not self.transition_active:
@@ -447,22 +512,41 @@ class Game:
 
                         if player_rect.colliderect(spike_rect):
                             self.dead = 1
+                            # Play death sound
+                            if self.death_sound:
+                                self.death_sound.play()
                             break
 
             # Check key collection
             if not self.dead and not self.transition_active and not self.has_key:
                 player_rect = self.player.rect()
+                key_img = self.assets['key'][0]
+                # Get tight bounding rect around non-transparent pixels
+                bounding_rect = key_img.get_bounding_rect()
+                
                 # Check key tiles in tilemap
                 for loc in list(self.tilemap.tilemap.keys()):
                     tile = self.tilemap.tilemap[loc]
                     if tile['type'] == 'key':
                         tile_x = tile['pos'][0] * self.tilemap.tile_size
                         tile_y = tile['pos'][1] * self.tilemap.tile_size
-                        # Key is 48x48, but tile size is 16x16, so we need to check the actual key size
-                        key_rect = pygame.Rect(tile_x, tile_y, 48, 48)
+                        # Key is 48x48, centered on 16x16 tile
+                        # Calculate centered position on tile
+                        offset_x = (self.tilemap.tile_size - key_img.get_width()) // 2
+                        offset_y = (self.tilemap.tile_size - key_img.get_height()) // 2
+                        # Create collision rect using bounding rect
+                        key_rect = pygame.Rect(
+                            tile_x + offset_x + bounding_rect.x,
+                            tile_y + offset_y + bounding_rect.y,
+                            bounding_rect.width,
+                            bounding_rect.height
+                        )
                         if player_rect.colliderect(key_rect):
                             # Collect the key
                             self.has_key = True
+                            # Play key sound
+                            if self.key_sound:
+                                self.key_sound.play()
                             # Remove key from tilemap
                             del self.tilemap.tilemap[loc]
                             break
@@ -471,10 +555,20 @@ class Game:
                 if not self.has_key:
                     for tile in self.tilemap.offgrid_tiles[:]:  # Use slice copy to safely remove during iteration
                         if tile['type'] == 'key':
-                            key_rect = pygame.Rect(tile['pos'][0], tile['pos'][1], 48, 48)
+                            # Keys in offgrid_tiles have their pos already centered
+                            # Create collision rect using bounding rect
+                            key_rect = pygame.Rect(
+                                tile['pos'][0] + bounding_rect.x,
+                                tile['pos'][1] + bounding_rect.y,
+                                bounding_rect.width,
+                                bounding_rect.height
+                            )
                             if player_rect.colliderect(key_rect):
                                 # Collect the key
                                 self.has_key = True
+                                # Play key sound
+                                if self.key_sound:
+                                    self.key_sound.play()
                                 # Remove key from offgrid_tiles
                                 self.tilemap.offgrid_tiles.remove(tile)
                                 break
@@ -541,6 +635,9 @@ class Game:
                         spring_horizontal_rect = pygame.Rect(tile_x, tile_y, self.tilemap.tile_size, self.tilemap.tile_size)
 
                         if player_rect.colliderect(spring_horizontal_rect):
+                            # Play spring sound
+                            if self.spring_sound:
+                                self.spring_sound.play()
                             # Determine launch direction based on which side the player is on
                             player_center_x = player_rect.centerx
                             player_center_y = player_rect.centery
@@ -659,6 +756,9 @@ class Game:
                     )
                     if player_rect.colliderect(key_rect):
                         self.has_key = True
+                        # Play key sound
+                        if self.key_sound:
+                            self.key_sound.play()
                         self.keys.remove(key_tile)
                         # Also remove from tilemap
                         if key_tile in self.tilemap.offgrid_tiles:
@@ -790,6 +890,9 @@ class Game:
                                 self.player_portal.lock('left')  # 'left' = red
                                 self.cursor_portal.lock('left')
                                 self.current_portal_color = 'red'
+                                # Play portal shift sound
+                                if self.portal_shift_sound:
+                                    self.portal_shift_sound.play()
                         elif event.button == 3:  # Right click - switch to white portal
                             if self.current_portal_color == 'red':
                                 self.player_portal.unlock()
@@ -797,6 +900,9 @@ class Game:
                                 self.player_portal.lock('right')  # 'right' = white
                                 self.cursor_portal.lock('right')
                                 self.current_portal_color = 'white'
+                                # Play portal shift sound
+                                if self.portal_shift_sound:
+                                    self.portal_shift_sound.play()
 
             # Update transition
             if self.transition_active:
