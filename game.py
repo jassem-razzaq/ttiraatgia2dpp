@@ -40,9 +40,13 @@ class Game:
         game_dir = os.path.dirname(os.path.abspath(__file__))
         spring_horizontal_img = pygame.image.load(os.path.join(game_dir, 'data', 'images', 'spring_horizontal.png')).convert_alpha()
 
+        # Load cursor image
+        cursor_img = pygame.image.load(os.path.join(game_dir, 'data', 'images', 'cursor.png')).convert_alpha()
+
         # Load portal sprites
         portal_red_images = load_images('portal_red')
         portal_white_images = load_images('portal_white')
+        portal_grey_images = load_images('portal_grey')
 
         self.assets = {
             'decor': load_images('tiles/decor'),
@@ -54,6 +58,7 @@ class Game:
             'spring_horizontal': [spring_horizontal_img],  # Horizontal spring launcher tile
             'portal/red': Animation(portal_red_images, img_dur=5),
             'portal/white': Animation(portal_white_images, img_dur=5),
+            'portal/grey': Animation(portal_grey_images, img_dur=5),
             'player/idle': Animation(load_images('entities/player/idle'), img_dur=6),
             'player/run': Animation(load_images('entities/player/run'), img_dur=4),
             'player/jump': Animation(load_images('entities/player/jump')),
@@ -67,6 +72,10 @@ class Game:
         self.player = Player(self, (50, 50), (8, 15))
 
         self.tilemap = Tilemap(self, tile_size=16)
+        
+        # Store cursor image and hide default cursor
+        self.cursor_img = cursor_img
+        pygame.mouse.set_visible(False)
 
         # Portal system
         self.player_portal = Portal(self, size=64)
@@ -808,6 +817,13 @@ class Game:
                 self.display_2.blit(overlay, (0, 0))
 
             self.screen.blit(pygame.transform.scale(self.display_2, self.screen.get_size()), (0, 0))
+            
+            # Render custom cursor at mouse position (centered)
+            mouse_x, mouse_y = pygame.mouse.get_pos()
+            cursor_x = mouse_x - self.cursor_img.get_width() // 2
+            cursor_y = mouse_y - self.cursor_img.get_height() // 2
+            self.screen.blit(self.cursor_img, (cursor_x, cursor_y))
+            
             pygame.display.update()
             self.clock.tick(60)
 

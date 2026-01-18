@@ -16,13 +16,17 @@ class Portal:
         if hasattr(game, 'assets'):
             self.red_animation = game.assets.get('portal/red', None)
             self.white_animation = game.assets.get('portal/white', None)
+            self.grey_animation = game.assets.get('portal/grey', None)
             if self.red_animation:
                 self.red_animation = self.red_animation.copy()
             if self.white_animation:
                 self.white_animation = self.white_animation.copy()
+            if self.grey_animation:
+                self.grey_animation = self.grey_animation.copy()
         else:
             self.red_animation = None
             self.white_animation = None
+            self.grey_animation = None
         
     def update(self, follow_pos):
         if not self.locked:
@@ -38,6 +42,8 @@ class Portal:
             self.red_animation.update()
         if self.white_animation:
             self.white_animation.update()
+        if self.grey_animation:
+            self.grey_animation.update()
     
     def lock(self, lock_type):
         self.locked = True
@@ -325,5 +331,15 @@ class Portal:
                 # Fallback to old rectangle drawing if sprites not available
                 pygame.draw.rect(surf, self.color, (x, y, self.size, self.size), self.thickness)
         else:
-            # Unlocked portal - draw gray outline
-            pygame.draw.rect(surf, self.color, (x, y, self.size, self.size), self.thickness)
+            # Unlocked portal - use grey animation with transparency
+            if self.grey_animation:
+                portal_img = self.grey_animation.img()
+                # Scale image to portal size if needed
+                if portal_img.get_width() != self.size or portal_img.get_height() != self.size:
+                    portal_img = pygame.transform.scale(portal_img, (self.size, self.size))
+                # Make grey portal slightly transparent (70% opacity)
+                portal_img.set_alpha(100)  # 178/255 ≈ 70% opacity
+                surf.blit(portal_img, (x, y))
+            else:
+                # Fallback to old rectangle drawing if sprites not available
+                pygame.draw.rect(surf, self.color, (x, y, self.size, self.size), self.thickness)
