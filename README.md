@@ -1,18 +1,39 @@
-# The Time I was a Goat in a 2D Puzzle Plateformer
+# The Time I was a Teleporting Goat in a 2D Puzzle Platformer
 ![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
-![DigitalOcean](https://img.shields.io/badge/DigitalOcean-%230167ff.svg?style=for-the-badge&logo=digitalOcean&logoColor=white)
 ![Google Gemini](https://img.shields.io/badge/google%20gemini-8E75B2?style=for-the-badge&logo=google%20gemini&logoColor=white)
 
-A teleportation-based puzzle game built with **Python and Pygame**, where a goat bends space itself to solve physics driven challenges.
+A teleportation-based puzzle game built with **Python and Pygame**, where a goat travels between gomportals to solve physics based challenges.
 Created for **GoatHacks 2026 @ WPI**
 
 ### Requirements
 - Python 3.9+
-- Pygame 
+- Pygame
+- Google Gemini
 
 ### Install & Run
+1. Create and activate a virtual environment
+
 ```bash
-pip install pygame
+python -m venv venv
+
+# Windows
+venv\Scripts\activate
+
+# macOS / Linux
+source venv/bin/activate
+```
+
+2. Install Dependencies
+```bash
+pip install -r requirements.txt
+```
+
+3. Set up environment variables
+Create a .env file in the project root and add:
+`GOOGLE_GEMINI_KEY=your_api_key_here`
+
+4. Run the game
+```bash
 python game.py
 ```
 
@@ -34,8 +55,8 @@ This simple rule unlocks complex puzzles involving positioning, timinig, and spa
 | W / ↑ / Space       | Jump                           |
 | Shift (hold)        | Enter portal mode (red portal) |
 | Mouse               | Aim teleport destination       |
-| Left Click          | Switch to red portal           |
-| Right Click         | Switch to white portal         |
+| Left Click (with Shift)         | Switch to red portal           |
+| Right Click (with Shift)        | Switch to white portal         |
 | R                   | Restart level                  |
 
 ### Teleportation
@@ -44,11 +65,9 @@ This simple rule unlocks complex puzzles involving positioning, timinig, and spa
 - Portal placement is blocked in restricted zones (`noportalzone` tile)
 
 ### Puzzle Elements
-- Buttons - Must be pressed to open exits
 - Doors & Keys - Keys are required to unlocked certain paths
 - Crates - Can be pushed, teleported, and used as weights
 - Springs - Vertical and horizontal launchers
-- Lasers & Spikes - Hazards that instantly reset the level
 - Anti-portal Zones - Areas where teleporting is disabled
 
 ### Level Design
