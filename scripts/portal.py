@@ -16,13 +16,17 @@ class Portal:
         if hasattr(game, 'assets'):
             self.red_animation = game.assets.get('portal/red', None)
             self.white_animation = game.assets.get('portal/white', None)
+            self.grey_animation = game.assets.get('portal/grey', None)
             if self.red_animation:
                 self.red_animation = self.red_animation.copy()
             if self.white_animation:
                 self.white_animation = self.white_animation.copy()
+            if self.grey_animation:
+                self.grey_animation = self.grey_animation.copy()
         else:
             self.red_animation = None
             self.white_animation = None
+            self.grey_animation = None
         
     def update(self, follow_pos):
         if not self.locked:
@@ -38,6 +42,8 @@ class Portal:
             self.red_animation.update()
         if self.white_animation:
             self.white_animation.update()
+        if self.grey_animation:
+            self.grey_animation.update()
     
     def lock(self, lock_type):
         self.locked = True
@@ -184,14 +190,16 @@ class Portal:
                 entity.velocity[0] = old_velocity[0] if old_velocity[0] < 0 else -abs(old_velocity[0])
                 entity.velocity[1] = old_velocity[1]  # Keep vertical velocity
             elif exit_edge == 'right':  # Exiting right edge, enter from left edge (inside, near left)
+                # Position entity at the inside left edge of the exit portal
+                # The entity's left edge starts at the left inside edge of the portal
                 entity.pos[0] = exit_rect.left + offset
                 # Use relative_position to place entity at same position along the vertical edge
                 entity.pos[1] = exit_rect.top + (relative_position * exit_rect.height) - entity.size[1] // 2
                 # Clamp to ensure entity stays within portal bounds
                 entity.pos[1] = max(exit_rect.top, min(exit_rect.bottom - entity.size[1], entity.pos[1]))
-                # Entering from left (moving right), exit going right (preserve rightward motion)
-                # If was moving right (positive), keep moving right
-                entity.velocity[0] = old_velocity[0] if old_velocity[0] > 0 else abs(old_velocity[0])
+                # Entering from left (moving right), exit going right (moving from left to right)
+                # Ensure positive horizontal velocity (moving right from left edge)
+                entity.velocity[0] = abs(old_velocity[0]) if old_velocity[0] != 0 else (abs(old_velocity[1]) if old_velocity[1] != 0 else 2.0)
                 entity.velocity[1] = old_velocity[1]  # Keep vertical velocity
             elif exit_edge == 'top':  # Exiting top edge, enter from bottom edge (inside, near bottom)
                 # Use relative_position to place entity at same position along the horizontal edge
@@ -323,5 +331,15 @@ class Portal:
                 # Fallback to old rectangle drawing if sprites not available
                 pygame.draw.rect(surf, self.color, (x, y, self.size, self.size), self.thickness)
         else:
-            # Unlocked portal - draw gray outline
-            pygame.draw.rect(surf, self.color, (x, y, self.size, self.size), self.thickness)
+            # Unlocked portal - use grey animation with transparency
+            if self.grey_animation:
+                portal_img = self.grey_animation.img()
+                # Scale image to portal size if needed
+                if portal_img.get_width() != self.size or portal_img.get_height() != self.size:
+                    portal_img = pygame.transform.scale(portal_img, (self.size, self.size))
+                # Make grey portal slightly transparent (70% opacity)
+                portal_img.set_alpha(100)  # 178/255 ≈ 70% opacity
+                surf.blit(portal_img, (x, y))
+            else:
+                # Fallback to old rectangle drawing if sprites not available
+                pygame.draw.rect(surf, self.color, (x, y, self.size, self.size), self.thickness)

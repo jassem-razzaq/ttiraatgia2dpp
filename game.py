@@ -27,8 +27,7 @@ class Game:
         noportalzone_large_img.set_alpha(128)  # Make it semi-transparent
         noportalzone_img = pygame.transform.scale(noportalzone_large_img, (16, 16))
 
-        door_large_img = load_image('tiles/door.png')
-        door = pygame.transform.scale(door_large_img, (48, 48))
+        door = load_image('tiles/door.png')
 
         key_large_img = load_image('tiles/key.png')
         key = pygame.transform.scale(key_large_img, (48, 48))
@@ -41,9 +40,13 @@ class Game:
         game_dir = os.path.dirname(os.path.abspath(__file__))
         spring_horizontal_img = pygame.image.load(os.path.join(game_dir, 'data', 'images', 'spring_horizontal.png')).convert_alpha()
 
+        # Load cursor image
+        cursor_img = pygame.image.load(os.path.join(game_dir, 'data', 'images', 'cursor.png')).convert_alpha()
+
         # Load portal sprites
         portal_red_images = load_images('portal_red')
         portal_white_images = load_images('portal_white')
+        portal_grey_images = load_images('portal_grey')
 
         self.assets = {
             'decor': load_images('tiles/decor'),
@@ -55,6 +58,7 @@ class Game:
             'spring_horizontal': [spring_horizontal_img],  # Horizontal spring launcher tile
             'portal/red': Animation(portal_red_images, img_dur=5),
             'portal/white': Animation(portal_white_images, img_dur=5),
+            'portal/grey': Animation(portal_grey_images, img_dur=5),
             'player/idle': Animation(load_images('entities/player/idle'), img_dur=6),
             'player/run': Animation(load_images('entities/player/run'), img_dur=4),
             'player/jump': Animation(load_images('entities/player/jump')),
@@ -68,6 +72,10 @@ class Game:
         self.player = Player(self, (50, 50), (8, 15))
 
         self.tilemap = Tilemap(self, tile_size=16)
+        
+        # Store cursor image and hide default cursor
+        self.cursor_img = cursor_img
+        pygame.mouse.set_visible(False)
 
         # Portal system
         self.player_portal = Portal(self, size=64)
@@ -80,7 +88,6 @@ class Game:
         self.crates = []
         self.buttons = []
         self.springs = []
-        self.lasers = []
         self.exit_door = None
         self.exit_open = False
         self.keys = []  # List of key positions (offgrid tiles)
@@ -129,7 +136,6 @@ class Game:
         self.crates = []
         self.buttons = []
         self.springs = []
-        self.lasers = []
         self.exit_door = None
         self.exit_open = False
         self.keys = []  # List of key positions (offgrid tiles)
@@ -168,8 +174,6 @@ class Game:
                 self.buttons.append({'pos': pos, 'size': (16, 8), 'pressed': False})
             elif variant == 3:  # Spring (bottom attached, launches upward)
                 self.springs.append(Spring(self, pos))
-            elif variant == 6:  # Laser
-                self.lasers.append({'pos': pos, 'size': (16, 240), 'active': True})
             elif variant == 7:  # Exit door
                 self.exit_door = {'pos': pos, 'size': (16, 32)}
 
@@ -352,15 +356,7 @@ class Game:
                         spring.teleported_this_frame = True
                 else:
                     spring.teleported_this_frame = False
-
-            # Check laser collisions
-            for laser in self.lasers:
-                if not laser['active']:
-                    continue
-                laser_rect = pygame.Rect(laser['pos'][0], laser['pos'][1], laser['size'][0], laser['size'][1])
-                if laser_rect.colliderect(self.player.rect()):
-                    self.dead = 1
-
+            
             # Check if player fell off the screen
             if not self.dead and not self.transition_active:
                 # Player falls off if they go below the display height (with some margin)
@@ -436,14 +432,26 @@ class Game:
                 can_use_door = not self.room_has_key or self.has_key
 
                 if can_use_door:
+                    door_img = self.assets['door'][0]
+                    # Get tight bounding rect around non-transparent pixels
+                    bounding_rect = door_img.get_bounding_rect()
+                    
                     # Check door tiles in tilemap
                     for loc in self.tilemap.tilemap:
                         tile = self.tilemap.tilemap[loc]
                         if tile['type'] == 'door':
                             tile_x = tile['pos'][0] * self.tilemap.tile_size
                             tile_y = tile['pos'][1] * self.tilemap.tile_size
-                            # Door is 48x48, but tile size is 16x16, so we need to check the actual door size
-                            door_rect = pygame.Rect(tile_x, tile_y, 48, 48)
+                            # Use bounding rect to match image exactly
+                            # Center the door on the tile (same as rendering), then apply bounding rect offset
+                            offset_x = (self.tilemap.tile_size - door_img.get_width()) // 2
+                            offset_y = (self.tilemap.tile_size - door_img.get_height()) // 2
+                            door_rect = pygame.Rect(
+                                tile_x + offset_x + bounding_rect.x,
+                                tile_y + offset_y + bounding_rect.y,
+                                bounding_rect.width,
+                                bounding_rect.height
+                            )
                             if player_rect.colliderect(door_rect):
                                 # Load levelselect.json
                                 game_dir = os.path.dirname(os.path.abspath(__file__))
@@ -454,7 +462,13 @@ class Game:
                     # Check door tiles in offgrid_tiles
                     for tile in self.tilemap.offgrid_tiles:
                         if tile['type'] == 'door':
-                            door_rect = pygame.Rect(tile['pos'][0], tile['pos'][1], 48, 48)
+                            # Use bounding rect to match image exactly
+                            door_rect = pygame.Rect(
+                                tile['pos'][0] + bounding_rect.x,
+                                tile['pos'][1] + bounding_rect.y,
+                                bounding_rect.width,
+                                bounding_rect.height
+                            )
                             if player_rect.colliderect(door_rect):
                                 # Load levelselect.json
                                 game_dir = os.path.dirname(os.path.abspath(__file__))
@@ -489,7 +503,7 @@ class Game:
 
                             # Launch horizontally based on which side player is on
                             # Use larger horizontal velocity if player is more to the side
-                            launch_power = 8.0  # Base launch power
+                            launch_power = 6.5  # Base launch power
                             if abs(dx) > abs(dy):  # Player is more to the side
                                 if dx > 0:  # Player is to the right, launch right
                                     self.player.velocity[0] = launch_power
@@ -633,15 +647,7 @@ class Game:
             # Springs
             for spring in self.springs:
                 spring.render(self.display, offset=render_scroll)
-
-            # Lasers
-            for laser in self.lasers:
-                if laser['active']:
-                    laser_rect = pygame.Rect(laser['pos'][0] - render_scroll[0], 
-                                            laser['pos'][1] - render_scroll[1], 
-                                            laser['size'][0], laser['size'][1])
-                    pygame.draw.rect(self.display, (255, 0, 0), laser_rect)
-
+                        
             # Exit door
             if self.exit_door:
                 exit_rect = pygame.Rect(self.exit_door['pos'][0] - render_scroll[0], 
@@ -743,7 +749,6 @@ class Game:
                         self.crates = []
                         self.buttons = []
                         self.springs = []
-                        self.lasers = []
                         self.exit_door = None
                         self.exit_open = False
                         self.keys = []
@@ -766,8 +771,6 @@ class Game:
                                 self.buttons.append({'pos': pos, 'size': (16, 8), 'pressed': False})
                             elif variant == 3:  # Spring (bottom attached, launches upward)
                                 self.springs.append(Spring(self, pos))
-                            elif variant == 6:  # Laser
-                                self.lasers.append({'pos': pos, 'size': (16, 240), 'active': True})
                             elif variant == 7:  # Exit door
                                 self.exit_door = {'pos': pos, 'size': (16, 32)}
 
@@ -814,6 +817,13 @@ class Game:
                 self.display_2.blit(overlay, (0, 0))
 
             self.screen.blit(pygame.transform.scale(self.display_2, self.screen.get_size()), (0, 0))
+            
+            # Render custom cursor at mouse position (centered)
+            mouse_x, mouse_y = pygame.mouse.get_pos()
+            cursor_x = mouse_x - self.cursor_img.get_width() // 2
+            cursor_y = mouse_y - self.cursor_img.get_height() // 2
+            self.screen.blit(self.cursor_img, (cursor_x, cursor_y))
+            
             pygame.display.update()
             self.clock.tick(60)
 
