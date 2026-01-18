@@ -131,6 +131,15 @@ class Game:
                 self.spring_sound = None
         except:
             self.spring_sound = None
+        
+        try:
+            portal_place_sound_path = os.path.join(audio_dir, 'portal_place.wav')
+            if os.path.exists(portal_place_sound_path):
+                self.portal_place_sound = pygame.mixer.Sound(portal_place_sound_path)
+            else:
+                self.portal_place_sound = None
+        except:
+            self.portal_place_sound = None
 
         self.player = Player(self, (50, 50), (8, 15))
 
@@ -851,6 +860,8 @@ class Game:
                     if event.key == pygame.K_LSHIFT or event.key == pygame.K_RSHIFT:
                         if not portal_placement_blocked and not self.paused:
                             self.portal_mode = True
+                            if self.portal_place_sound:
+                                self.portal_place_sound.play()
                             # Automatically lock portals in red mode
                             self.player_portal.lock('left')  # 'left' = red
                             self.cursor_portal.lock('left')
