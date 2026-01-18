@@ -44,6 +44,12 @@ class Game:
         cursor_img = pygame.image.load(os.path.join(game_dir, 'data', 'images', 'cursor.png'))
         cursor_img = cursor_img.convert_alpha()
 
+        # Load control images
+        left_mouse_img = pygame.image.load(os.path.join(game_dir, 'data', 'images', 'controls', 'left_mouse.png')).convert_alpha()
+        right_mouse_img = pygame.image.load(os.path.join(game_dir, 'data', 'images', 'controls', 'right_mouse.png')).convert_alpha()
+        
+        self.control_images = [left_mouse_img, right_mouse_img]
+
         # Load portal sprites
         portal_red_images = load_images('portal_red')
         portal_white_images = load_images('portal_white')
@@ -940,6 +946,20 @@ class Game:
                     return "BACK_TO_SELECT"
 
             self.display_2.blit(self.display, (0, 0))
+
+            # Render control images in top right corner
+            control_spacing = 5  # Spacing between control images
+            control_y = 5  # Top margin
+            
+            # Calculate total width of all control images + spacing
+            total_width = sum(img.get_width() for img in self.control_images) + (control_spacing * (len(self.control_images) - 1))
+            control_start_x = self.display_2.get_width() - total_width - 5  # 5px margin from right edge
+            
+            # Draw control images from left to right
+            current_x = control_start_x
+            for img in self.control_images:
+                self.display_2.blit(img, (current_x, control_y))
+                current_x += img.get_width() + control_spacing
 
             # Render transition overlay (only for death, not win)
             if self.transition_active and self.transition_type != 'win':
