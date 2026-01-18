@@ -372,14 +372,34 @@ class Game:
                         player_horizontal_movement = (self.movement[1] - self.movement[0])
 
                         # Simple pushing: if player is moving left/right and colliding, move spring directly
+                        # But check for wall collisions first
+                        push_amount = abs(player_horizontal_movement) * 2
                         if player_horizontal_movement > 0:  # Player moving right
                             # Check if player is on the left side of spring
                             if player_rect.centerx < spring_rect.centerx:
-                                spring.pos[0] += abs(player_horizontal_movement) * 2  # Move spring right
+                                # Test if pushing right would cause a wall collision
+                                test_pos_x = spring.pos[0] + push_amount
+                                test_rect = pygame.Rect(test_pos_x, spring.pos[1], spring.size[0], spring.size[1])
+                                wall_collision = False
+                                for rect in self.tilemap.physics_rects_around((test_pos_x, spring.pos[1])):
+                                    if test_rect.colliderect(rect):
+                                        wall_collision = True
+                                        break
+                                if not wall_collision:
+                                    spring.velocity[0] = push_amount  # Use velocity instead of direct position change
                         elif player_horizontal_movement < 0:  # Player moving left
                             # Check if player is on the right side of spring
                             if player_rect.centerx > spring_rect.centerx:
-                                spring.pos[0] -= abs(player_horizontal_movement) * 2  # Move spring left
+                                # Test if pushing left would cause a wall collision
+                                test_pos_x = spring.pos[0] - push_amount
+                                test_rect = pygame.Rect(test_pos_x, spring.pos[1], spring.size[0], spring.size[1])
+                                wall_collision = False
+                                for rect in self.tilemap.physics_rects_around((test_pos_x, spring.pos[1])):
+                                    if test_rect.colliderect(rect):
+                                        wall_collision = True
+                                        break
+                                if not wall_collision:
+                                    spring.velocity[0] = -push_amount  # Use velocity instead of direct position change
 
                 # Update spring with physics and collision detection
                 entities_to_check = [self.player] + self.crates
