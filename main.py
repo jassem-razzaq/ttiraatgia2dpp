@@ -85,9 +85,11 @@ def main():
         choice = run_homepage()
         
         if choice == "QUIT":
+            # Stop menu music when quitting
+            pygame.mixer.music.stop()
             break
         elif choice == "SELECT_LEVEL":
-            # Fade out from homepage
+            # Fade out from homepage (keep music playing - it continues in level selection)
             fade_transition(duration=0.25, fade_out=True)
             
             # Go to level selection (it will render immediately)
@@ -95,13 +97,17 @@ def main():
                 level_choice = run_level_select()
                 
                 if level_choice == "QUIT":
+                    # Stop menu music when quitting
+                    pygame.mixer.music.stop()
                     sys.exit(0)
                 elif level_choice == "BACK":
-                    # Fade out from level select
+                    # Fade out from level select (keep music playing - returns to homepage)
                     fade_transition(duration=0.25, fade_out=True)
                     # Return to homepage (will fade in automatically on first render)
                     break
                 else:
+                    # Stop menu music when starting a game
+                    pygame.mixer.music.stop()
                     # Fade out from level select
                     fade_transition(duration=0.25, fade_out=True)
                     
@@ -122,6 +128,8 @@ def main():
             # Fade in to homepage after returning from level select
             fade_transition(duration=0.25, fade_out=False)
         elif choice == "GENERATE_LEVEL":
+            # Stop menu music when starting generated level
+            pygame.mixer.music.stop()
             # Fade out from homepage
             fade_transition(duration=0.25, fade_out=True)
             

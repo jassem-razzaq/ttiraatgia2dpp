@@ -370,7 +370,7 @@ class Game:
     def run(self):
         try:
             game_dir = os.path.dirname(os.path.abspath(__file__))
-            music_path = os.path.join(game_dir, 'data', 'music.wav')
+            music_path = os.path.join(game_dir, 'data', 'audio', 'level_music.mp3')
             if os.path.exists(music_path):
                 pygame.mixer.music.load(music_path)
                 pygame.mixer.music.set_volume(0.5)

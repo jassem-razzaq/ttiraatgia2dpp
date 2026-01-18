@@ -145,6 +145,7 @@ class Homepage:
         self.goat_is_visible = False
         self.goat_surprised = False
         self.goat_surprised_start_time = 0.0
+        self.moo_start_time = 0.0
 
         # Speech bubble
         self.shocked_offset = (-62, -35)
@@ -196,6 +197,29 @@ class Homepage:
         self.GOAT_ENTRANCE_DELAY = 0.7
         self.GOAT_SURPRISED_DELAY = 1.0
         self.SPEECH_BUBBLE_DELAY = 0.3
+        
+        # Load audio files
+        audio_dir = os.path.join(game_dir, 'data', 'audio')
+        try:
+            menu_song_path = os.path.join(audio_dir, 'menu_song.mp3')
+            if os.path.exists(menu_song_path):
+                pygame.mixer.music.load(menu_song_path)
+                pygame.mixer.music.set_volume(0.5)
+                pygame.mixer.music.play(-1)  # Loop indefinitely
+        except:
+            pass  # Menu song might not exist
+        
+        try:
+            moo_sound_path = os.path.join(audio_dir, 'moo.mp3')
+            if os.path.exists(moo_sound_path):
+                self.moo_sound = pygame.mixer.Sound(moo_sound_path)
+            else:
+                self.moo_sound = None
+        except:
+            self.moo_sound = None
+        
+        # Track if moo sound has been played (to play only once)
+        self.moo_played = False
 
     # -----------------------------
     # Helpers
@@ -318,6 +342,8 @@ class Homepage:
                     self.goat_pos = self.goat_target_pos.copy()
                     self.phase = "goat_surprised"
                     self.goat_surprised_start_time = self.elapsed_time + self.GOAT_SURPRISED_DELAY
+                    # Calculate moo start time: 1 second before goat becomes shocked
+                    self.moo_start_time = self.goat_surprised_start_time - 1.0
                 else:
                     start_x = self.display.get_width() + 30
                     start_y = self.display.get_height() + 30
@@ -328,6 +354,12 @@ class Homepage:
 
         # Goat becomes surprised
         if self.phase == "goat_surprised":
+            # Play moo sound 1 second before goat becomes shocked
+            if not self.moo_played and self.moo_sound and self.moo_start_time > 0:
+                if self.elapsed_time >= self.moo_start_time:
+                    self.moo_sound.play()
+                    self.moo_played = True
+            
             if self.elapsed_time >= self.goat_surprised_start_time:
                 self.goat_surprised = True
                 self.phase = "speech_bubble"
