@@ -30,9 +30,11 @@ pip install -r requirements.txt
 
 3. Set up environment variables
 Create a .env file in the project root and add:
-`GOOGLE_GEMINI_KEY=your_api_key_here`
+```bash
+GOOGLE_GEMINI_KEY=your_api_key_here
+```
 
-4. Run the game
+5. Run the game
 ```bash
 python game.py
 ```
