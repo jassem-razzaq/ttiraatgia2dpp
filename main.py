@@ -30,11 +30,26 @@ def run_introduction(screen):
     game_dir = os.path.dirname(os.path.abspath(__file__))
     intro_image_path = os.path.join(game_dir, 'data', 'images', 'introduction.png')
     
+    # Load and play intro music
+    intro_music_path = os.path.join(game_dir, 'data', 'audio', 'intro_music.mp3')
+    try:
+        if os.path.exists(intro_music_path):
+            pygame.mixer.music.load(intro_music_path)
+            pygame.mixer.music.set_volume(0.5)
+            pygame.mixer.music.play(-1)  # Loop the music
+            music_playing = True
+        else:
+            music_playing = False
+    except:
+        music_playing = False
+    
     # Load introduction image
     try:
         intro_image = pygame.image.load(intro_image_path).convert()
     except:
-        # If image doesn't exist, skip introduction
+        # If image doesn't exist, skip introduction and stop music
+        if music_playing:
+            pygame.mixer.music.stop()
         return
     
     # Get screen dimensions
@@ -71,6 +86,7 @@ def run_introduction(screen):
     scroll_y = -initial_offset  # Start above the image (negative = shows black at top)
     pan_speed = 0.5  # Pixels per frame to scroll down
     clock = pygame.time.Clock()
+    initial_music_volume = 0.5  # Starting music volume
     
     # If image is shorter than screen height, no panning needed
     if scaled_height <= screen_height:
@@ -78,8 +94,12 @@ def run_introduction(screen):
         while True:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
+                    if music_playing:
+                        pygame.mixer.music.stop()
                     sys.exit(0)  # Exit game entirely on close button
                 if event.type == pygame.KEYDOWN:
+                    if music_playing:
+                        pygame.mixer.music.stop()
                     return  # Skip on any key press
             
             screen.fill((0, 0, 0))
@@ -101,8 +121,12 @@ def run_introduction(screen):
         while True:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
+                    if music_playing:
+                        pygame.mixer.music.stop()
                     sys.exit(0)  # Exit game entirely on close button
                 if event.type == pygame.KEYDOWN:
+                    if music_playing:
+                        pygame.mixer.music.stop()
                     return  # Skip on any key press
             
             # Clear screen
@@ -125,14 +149,22 @@ def run_introduction(screen):
                 progress = min(elapsed / fade_duration, 1.0)
                 fade_alpha = int(progress * 255)
                 
+                # Fade out music along with the visual fade
+                if music_playing:
+                    # Music volume fades from initial_volume to 0
+                    music_volume = initial_music_volume * (1.0 - progress)
+                    pygame.mixer.music.set_volume(music_volume)
+                
                 if fade_alpha > 0:
                     fade_overlay = pygame.Surface(screen.get_size())
                     fade_overlay.fill((0, 0, 0))
                     fade_overlay.set_alpha(fade_alpha)
                     screen.blit(fade_overlay, (0, 0))
                 
-                # Once fade completes (completely black), go to homepage
+                # Once fade completes (completely black), stop music and go to homepage
                 if progress >= 1.0:
+                    if music_playing:
+                        pygame.mixer.music.stop()
                     return  # Goes to homepage
             
             pygame.display.update()
