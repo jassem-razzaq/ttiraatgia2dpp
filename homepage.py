@@ -467,8 +467,14 @@ Return ONLY the JSON object, no markdown formatting, no code blocks, just the ra
         game_dir = os.path.dirname(os.path.abspath(__file__))
         maps_dir = os.path.join(game_dir, 'data', 'maps')
         
-        # Use a generated level filename
-        generated_map_path = os.path.join(maps_dir, 'generated_level.json')
+        # Find the next available numbered filename
+        counter = 1
+        while True:
+            filename = f'gemini{counter}.json'
+            generated_map_path = os.path.join(maps_dir, filename)
+            if not os.path.exists(generated_map_path):
+                break
+            counter += 1
         
         # Save the raw JSON response to file
         with open(generated_map_path, 'w', encoding='utf-8') as f:
