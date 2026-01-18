@@ -36,7 +36,7 @@ GOOGLE_GEMINI_KEY=your_api_key_here
 
 5. Run the game
 ```bash
-python game.py
+python main.py
 ```
 
 ## Core Idea
