@@ -100,13 +100,13 @@ class PhysicsEntity:
                         # Don't handle bottom collision (player can pass through bottom)
                     else:
                         # Normal collision handling for non-crates
-                    if frame_movement[1] > 0:
-                        entity_rect.bottom = collider_rect.top
-                        self.collisions['down'] = True
-                    if frame_movement[1] < 0:
-                        entity_rect.top = collider_rect.bottom
-                        self.collisions['up'] = True
-                    self.pos[1] = entity_rect.y
+                        if frame_movement[1] > 0:
+                            entity_rect.bottom = collider_rect.top
+                            self.collisions['down'] = True
+                        if frame_movement[1] < 0:
+                            entity_rect.top = collider_rect.bottom
+                            self.collisions['up'] = True
+                        self.pos[1] = entity_rect.y
                 
         if movement[0] > 0:
             self.flip = False

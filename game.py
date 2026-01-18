@@ -41,7 +41,8 @@ class Game:
         spring_horizontal_img = pygame.image.load(os.path.join(game_dir, 'data', 'images', 'spring_horizontal.png')).convert_alpha()
 
         # Load cursor image
-        cursor_img = pygame.image.load(os.path.join(game_dir, 'data', 'images', 'cursor.png')).convert_alpha()
+        cursor_img = pygame.image.load(os.path.join(game_dir, 'data', 'images', 'cursor.png'))
+        cursor_img = cursor_img.convert_alpha()
 
         # Load portal sprites
         portal_red_images = load_images('portal_red')
@@ -72,7 +73,7 @@ class Game:
         self.player = Player(self, (50, 50), (8, 15))
 
         self.tilemap = Tilemap(self, tile_size=16)
-        
+
         # Store cursor image and hide default cursor
         self.cursor_img = cursor_img
         pygame.mouse.set_visible(False)
