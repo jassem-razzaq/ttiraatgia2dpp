@@ -66,8 +66,10 @@ def run_introduction(screen):
     skip_text_y = screen_height - skip_text.get_height() - skip_text_padding
     
     # Panning animation variables
-    scroll_y = 0  # Start at top of image
-    pan_speed = 0.35  # Pixels per frame to scroll down
+    # Start from a negative position to show black space at the top initially
+    initial_offset = 150  # Pixels of black space to show at the top before image appears
+    scroll_y = -initial_offset  # Start above the image (negative = shows black at top)
+    pan_speed = 0.5  # Pixels per frame to scroll down
     clock = pygame.time.Clock()
     
     # If image is shorter than screen height, no panning needed
@@ -89,9 +91,14 @@ def run_introduction(screen):
             clock.tick(60)
     else:
         # Pan down through the image
-        max_scroll = scaled_height - screen_height
+        # Add bottom_offset to show black space at the bottom at the end
+        bottom_offset = 150  # Pixels of black space to show at the bottom after image ends
+        scroll_end_point = scaled_height - screen_height + bottom_offset  # Point where 150px black space is shown
+        fade_duration = 2  # Duration of fade in seconds
+        fade_started = False
+        fade_start_time = 0
         
-        while scroll_y < max_scroll:
+        while True:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     sys.exit(0)  # Exit game entirely on close button
@@ -106,33 +113,33 @@ def run_introduction(screen):
             # Draw skip text in bottom right
             screen.blit(skip_text, (skip_text_x, skip_text_y))
             
+            # Start fade when we reach the 150px bottom offset point
+            if scroll_y >= scroll_end_point and not fade_started:
+                fade_started = True
+                fade_start_time = pygame.time.get_ticks()
+            
+            # Apply fade overlay if fade has started
+            fade_alpha = 0
+            if fade_started:
+                elapsed = (pygame.time.get_ticks() - fade_start_time) / 1000.0
+                progress = min(elapsed / fade_duration, 1.0)
+                fade_alpha = int(progress * 255)
+                
+                if fade_alpha > 0:
+                    fade_overlay = pygame.Surface(screen.get_size())
+                    fade_overlay.fill((0, 0, 0))
+                    fade_overlay.set_alpha(fade_alpha)
+                    screen.blit(fade_overlay, (0, 0))
+                
+                # Once fade completes (completely black), go to homepage
+                if progress >= 1.0:
+                    return  # Goes to homepage
+            
             pygame.display.update()
             
-            # Update scroll position
+            # Continue scrolling even during fade
             scroll_y += pan_speed
-            clock.tick(60)
-        
-        # Once panning completes, wait for key press or timeout
-        wait_start = pygame.time.get_ticks()
-        wait_duration = 2000  # Wait 2 seconds at the end before auto-advancing
-        
-        while True:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    sys.exit(0)  # Exit game entirely on close button
-                if event.type == pygame.KEYDOWN:
-                    return  # Skip on any key press
             
-            # Auto-advance after wait duration
-            if pygame.time.get_ticks() - wait_start >= wait_duration:
-                return
-            
-            # Keep displaying the bottom of the image, centered horizontally
-            screen.fill((0, 0, 0))
-            screen.blit(intro_image, (x_offset, -max_scroll))
-            # Draw skip text in bottom right
-            screen.blit(skip_text, (skip_text_x, skip_text_y))
-            pygame.display.update()
             clock.tick(60)
 
 def fade_transition(screen=None, duration=0.25, fade_out=True):
