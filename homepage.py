@@ -113,9 +113,9 @@ class Homepage:
 
         # Pre-render title surfaces once with matching colors
         # Lines 1 & 3: white with light blue highlight, dark blue outline
-        # Middle: yellow-orange, thick dark blue outline
+        # Middle: gray, thick dark blue outline
         self.surf_line1 = self._render_outlined(self.title_line1, self.title_font_small, fg=(255, 255, 255), outline=(0, 50, 120), thickness=3)
-        self.surf_mid = self._render_outlined(self.title_mid, self.title_font_big, fg=(255, 200, 50), outline=(0, 50, 120), thickness=4)
+        self.surf_mid = self._render_outlined(self.title_mid, self.title_font_big, fg=(150, 150, 150), outline=(0, 50, 120), thickness=4)
         self.surf_line3 = self._render_outlined(self.title_line3, self.title_font_small, fg=(255, 255, 255), outline=(0, 50, 120), thickness=3)
 
         # Center the title block

@@ -101,19 +101,35 @@ class LevelSelect:
         self.generate_button_width = 180
         self.generate_button_height = 28
         
-        # Exit button
-        self.exit_button_width = 100
-        self.exit_button_height = 28
-        self.exit_button_y = self.display.get_height() - self.exit_button_height - 10
-        self.exit_button_rect = pygame.Rect(
-            (self.display.get_width() - self.exit_button_width) // 2,
-            self.exit_button_y,
-            self.exit_button_width,
-            self.exit_button_height
+        # Back and Quit buttons (side by side)
+        self.button_width_small = 100
+        self.button_height_small = 28
+        self.button_gap_small = 15  # Gap between buttons
+        self.button_y = self.display.get_height() - self.button_height_small - 10
+        
+        # Calculate total width and center position
+        total_buttons_width = (self.button_width_small * 2) + self.button_gap_small
+        buttons_start_x = (self.display.get_width() - total_buttons_width) // 2
+        
+        # Back button (left)
+        self.back_button_rect = pygame.Rect(
+            buttons_start_x,
+            self.button_y,
+            self.button_width_small,
+            self.button_height_small
+        )
+        
+        # Quit button (right)
+        quit_button_x = buttons_start_x + self.button_width_small + self.button_gap_small
+        self.quit_button_rect = pygame.Rect(
+            quit_button_x,
+            self.button_y,
+            self.button_width_small,
+            self.button_height_small
         )
         
         # Interactive state
-        self.hovered_button = None  # Level path, "generate", or "exit"
+        self.hovered_button = None  # Level path, "generate", "back", or "quit"
         self.clicked_button = None
         self.click_anim_time = 0.0
         self.elapsed_time = 0.0
@@ -316,8 +332,9 @@ class LevelSelect:
         generate_button_rect = pygame.Rect(self.gemini_column_x, generate_button_y, self.generate_button_width, self.generate_button_height)
         self._draw_generate_button(generate_button_rect)
         
-        # Exit button at bottom
-        self._draw_exit_button()
+        # Back and Quit buttons at bottom
+        self._draw_back_button()
+        self._draw_quit_button()
         
         # Loading overlay
         if self.is_loading:
@@ -426,43 +443,80 @@ class LevelSelect:
         
         self.display.blit(generate_surf, (generate_center_x - generate_scaled_width // 2, generate_center_y - generate_scaled_height // 2))
     
-    def _draw_exit_button(self):
-        """Draw the exit button"""
-        is_exit_hovered = self.hovered_button == "exit"
-        is_exit_clicked = self.clicked_button == "exit"
+    def _draw_back_button(self):
+        """Draw the back button (lighter red style)"""
+        is_back_hovered = self.hovered_button == "back"
+        is_back_clicked = self.clicked_button == "back"
         
-        exit_scale = 1.0
-        if is_exit_clicked and self.click_anim_time > 0:
-            exit_scale = 0.95
-        elif is_exit_hovered:
-            exit_scale = 1.05
+        back_scale = 1.0
+        if is_back_clicked and self.click_anim_time > 0:
+            back_scale = 0.95
+        elif is_back_hovered:
+            back_scale = 1.05
         
-        # Exit button wiggle
-        exit_phase = self.elapsed_time * 1.8 + 100
-        exit_wiggle_x = math.sin(exit_phase) * 1.0
-        exit_wiggle_y = math.cos(exit_phase * 1.3) * 1.0
+        # Back button wiggle
+        back_phase = self.elapsed_time * 1.8 + 100
+        back_wiggle_x = math.sin(back_phase) * 1.0
+        back_wiggle_y = math.cos(back_phase * 1.3) * 1.0
         
-        exit_center_x = self.exit_button_rect.centerx + int(exit_wiggle_x)
-        exit_center_y = self.exit_button_rect.centery + int(exit_wiggle_y)
-        exit_scaled_width = int(self.exit_button_rect.width * exit_scale)
-        exit_scaled_height = int(self.exit_button_rect.height * exit_scale)
+        back_center_x = self.back_button_rect.centerx + int(back_wiggle_x)
+        back_center_y = self.back_button_rect.centery + int(back_wiggle_y)
+        back_scaled_width = int(self.back_button_rect.width * back_scale)
+        back_scaled_height = int(self.back_button_rect.height * back_scale)
         
-        # Change background color on hover
-        if is_exit_hovered:
-            exit_bg_color = (230, 40, 40)  # Brighter red when hovered
+        # Change background color on hover (lighter red style)
+        if is_back_hovered:
+            back_bg_color = (255, 120, 120)  # Brighter lighter red when hovered
         else:
-            exit_bg_color = (200, 20, 20)  # Normal red
+            back_bg_color = (255, 150, 150)  # Lighter red
         
-        exit_surf = pygame.Surface((exit_scaled_width, exit_scaled_height), pygame.SRCALPHA)
-        pygame.draw.rect(exit_surf, exit_bg_color, (0, 0, exit_scaled_width, exit_scaled_height), border_radius=5)
-        pygame.draw.rect(exit_surf, (0, 50, 120), (0, 0, exit_scaled_width, exit_scaled_height), width=1, border_radius=5)  # Subtle dark blue outline
+        back_surf = pygame.Surface((back_scaled_width, back_scaled_height), pygame.SRCALPHA)
+        pygame.draw.rect(back_surf, back_bg_color, (0, 0, back_scaled_width, back_scaled_height), border_radius=5)
         
-        exit_text_surf = self.font.render("BACK", False, (255, 255, 255))
-        exit_text_x = (exit_scaled_width - exit_text_surf.get_width()) // 2
-        exit_text_y = (exit_scaled_height - exit_text_surf.get_height()) // 2
-        exit_surf.blit(exit_text_surf, (exit_text_x, exit_text_y))
+        back_text_surf = self.font.render("BACK", False, (255, 255, 255))  # White text
+        back_text_x = (back_scaled_width - back_text_surf.get_width()) // 2
+        back_text_y = (back_scaled_height - back_text_surf.get_height()) // 2
+        back_surf.blit(back_text_surf, (back_text_x, back_text_y))
         
-        self.display.blit(exit_surf, (exit_center_x - exit_scaled_width // 2, exit_center_y - exit_scaled_height // 2))
+        self.display.blit(back_surf, (back_center_x - back_scaled_width // 2, back_center_y - back_scaled_height // 2))
+    
+    def _draw_quit_button(self):
+        """Draw the quit button (red style, like old exit button)"""
+        is_quit_hovered = self.hovered_button == "quit"
+        is_quit_clicked = self.clicked_button == "quit"
+        
+        quit_scale = 1.0
+        if is_quit_clicked and self.click_anim_time > 0:
+            quit_scale = 0.95
+        elif is_quit_hovered:
+            quit_scale = 1.05
+        
+        # Quit button wiggle
+        quit_phase = self.elapsed_time * 1.8 + 200
+        quit_wiggle_x = math.sin(quit_phase) * 1.0
+        quit_wiggle_y = math.cos(quit_phase * 1.3) * 1.0
+        
+        quit_center_x = self.quit_button_rect.centerx + int(quit_wiggle_x)
+        quit_center_y = self.quit_button_rect.centery + int(quit_wiggle_y)
+        quit_scaled_width = int(self.quit_button_rect.width * quit_scale)
+        quit_scaled_height = int(self.quit_button_rect.height * quit_scale)
+        
+        # Change background color on hover (red style like old exit button)
+        if is_quit_hovered:
+            quit_bg_color = (230, 40, 40)  # Brighter red when hovered
+        else:
+            quit_bg_color = (200, 20, 20)  # Normal red
+        
+        quit_surf = pygame.Surface((quit_scaled_width, quit_scaled_height), pygame.SRCALPHA)
+        pygame.draw.rect(quit_surf, quit_bg_color, (0, 0, quit_scaled_width, quit_scaled_height), border_radius=5)
+        pygame.draw.rect(quit_surf, (0, 50, 120), (0, 0, quit_scaled_width, quit_scaled_height), width=1, border_radius=5)  # Subtle dark blue outline
+        
+        quit_text_surf = self.font.render("EXIT", False, (255, 255, 255))  # White text
+        quit_text_x = (quit_scaled_width - quit_text_surf.get_width()) // 2
+        quit_text_y = (quit_scaled_height - quit_text_surf.get_height()) // 2
+        quit_surf.blit(quit_text_surf, (quit_text_x, quit_text_y))
+        
+        self.display.blit(quit_surf, (quit_center_x - quit_scaled_width // 2, quit_center_y - quit_scaled_height // 2))
     
     def update_hover(self, mouse_pos):
         """Update which button is being hovered"""
@@ -508,12 +562,17 @@ class LevelSelect:
             self.hovered_button = "generate"
             return
         
-        # Check exit button
-        if self.exit_button_rect.collidepoint(display_pos):
-            self.hovered_button = "exit"
+        # Check back button
+        if self.back_button_rect.collidepoint(display_pos):
+            self.hovered_button = "back"
+            return
+        
+        # Check quit button
+        if self.quit_button_rect.collidepoint(display_pos):
+            self.hovered_button = "quit"
     
     def handle_click(self, mouse_pos):
-        """Handle mouse clicks, return level path or "BACK" or "GENERATE_GEMINI" or None"""
+        """Handle mouse clicks, return level path or "BACK" or "QUIT" or "GENERATE_GEMINI" or None"""
         display_x = int((mouse_pos[0] / self.screen.get_width()) * self.display.get_width())
         display_y = int((mouse_pos[1] / self.screen.get_height()) * self.display.get_height())
         display_pos = (display_x, display_y)
@@ -555,9 +614,13 @@ class LevelSelect:
         if generate_button_rect.collidepoint(display_pos):
             return "GENERATE_GEMINI"
         
-        # Check exit button
-        if self.exit_button_rect.collidepoint(display_pos):
+        # Check back button
+        if self.back_button_rect.collidepoint(display_pos):
             return "BACK"
+        
+        # Check quit button
+        if self.quit_button_rect.collidepoint(display_pos):
+            return "QUIT"
         
         return None
 
