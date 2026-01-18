@@ -431,6 +431,11 @@ class Spring:
                             # Launch entity UP - REPLACE velocity (don't add to existing upward velocity)
                             entity.velocity[1] = -launch_power
                             
+                            # Play spring sound if entity is player
+                            if hasattr(entity, 'type') and entity.type == 'player':
+                                if hasattr(self.game, 'spring_sound') and self.game.spring_sound:
+                                    self.game.spring_sound.play()
+                            
                             # No animation - removed
                             self.launched_entities[entity_id] = 0
         
