@@ -879,11 +879,8 @@ class Game:
                         if self.resume_button_rect.collidepoint(display_pos):
                             self.paused = False
                         elif self.quit_button_rect.collidepoint(display_pos):
-                            # Load levelselect.json
-                            game_dir = os.path.dirname(os.path.abspath(__file__))
-                            levelselect_path = os.path.join(game_dir, 'data', 'maps', 'levelselect.json')
-                            self.load_level(levelselect_path)
-                            self.paused = False
+                            # Return to level selection
+                            return "BACK_TO_SELECT"
                     # Only handle portal color cycling if in portal mode (shift held)
                     elif self.portal_mode:
                         # Block portal placement if cursor or cursor portal is over noportalzone
