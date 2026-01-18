@@ -16,6 +16,14 @@ The homepage handles:
 import os
 import pygame
 import math
+import json
+from google import genai
+try:
+    from dotenv import load_dotenv
+    load_dotenv()  # Load .env file if it exists
+except ImportError:
+    # python-dotenv not installed, but that's okay - can still use environment variables directly
+    pass
 
 
 class Homepage:
@@ -121,6 +129,10 @@ class Homepage:
         # Button states
         self.show_start_button = True
         self.show_menu_buttons = False  # Select Level, Generate Level
+        
+        # Loading state
+        self.is_loading = False
+        self.loading_text = "Generating level..."
         
         # Button definitions (rectangles) - Start button positioned below title, left-aligned
         # Calculate based on title height: 2 lines of text + spacing
@@ -315,9 +327,27 @@ class Homepage:
             draw_rounded_button(generate_rect, "Generate Level")
             # Update the stored rect for click detection
             self.generate_level_button_rect = generate_rect
+        
+        # Draw loading overlay if loading
+        if self.is_loading:
+            # Semi-transparent dark overlay
+            overlay = pygame.Surface(self.display.get_size())
+            overlay.fill((0, 0, 0))
+            overlay.set_alpha(200)
+            self.display.blit(overlay, (0, 0))
+            
+            # Loading text
+            loading_surface = self.font.render(self.loading_text, False, (255, 255, 255))
+            loading_x = self.display.get_width() // 2 - loading_surface.get_width() // 2
+            loading_y = self.display.get_height() // 2 - loading_surface.get_height() // 2
+            self.display.blit(loading_surface, (loading_x, loading_y))
     
     def handle_click(self, mouse_pos):
         """Handle mouse clicks, return choice string or None"""
+        # Ignore clicks while loading
+        if self.is_loading:
+            return None
+        
         # Convert screen coordinates to display coordinates
         display_x = int((mouse_pos[0] / self.screen.get_width()) * self.display.get_width())
         display_y = int((mouse_pos[1] / self.screen.get_height()) * self.display.get_height())
@@ -333,10 +363,123 @@ class Homepage:
         if self.show_menu_buttons and self.select_level_button_rect.collidepoint(display_pos):
             return "SELECT_LEVEL"
         
-        # Check Generate Level button (functionality removed - does nothing)
-        # if self.show_menu_buttons and self.generate_level_button_rect.collidepoint(display_pos):
-        #     return "GENERATE_LEVEL"
+        # Check Generate Level button
+        if self.show_menu_buttons and self.generate_level_button_rect.collidepoint(display_pos):
+            # Return a special value to trigger generation with loading screen in the main loop
+            return "GENERATE_LEVEL_START"
         
+        return None
+
+
+def generate_level_with_gemini(difficulty="medium", theme="classic puzzle"):
+    """
+    Generate a level using the Gemini API.
+    
+    Args:
+        difficulty: "easy", "medium", or "hard"
+        theme: A theme description for the level
+    
+    Returns:
+        str: Path to the generated level JSON file, or None if generation failed
+    """
+    try:
+        # The client gets the API key from the environment variable `GEMINI_API_KEY`.
+        client = genai.Client()
+        
+        # Construct the prompt
+        prompt = f"""You are a level designer for a 2D puzzle platformer with a unique portal mechanic. The player can place two linked portals - one always surrounds the player, and one follows the cursor. When the player enters one portal, they teleport to the other.
+
+**GAME MECHANICS:**
+- Player can place a portal at their position and at the cursor position
+- Walking into one portal teleports you to the other
+- Portals are 64x64 pixels (4x4 tiles)
+- Player can push crates through portals
+- Springs launch the player upward
+- Spikes kill the player (can be rotated: 0°=up, 90°=right, 180°=down, 270°=left)
+- Keys must be collected before doors can be used
+- "noportalzone" tiles block portal placement in certain areas
+
+**MAP FORMAT:**
+- JSON with "tilemap", "tile_size": 16, and "offgrid" array
+- Map bounds: x from 0 to 33, y from 0 to 23 (34x24 tiles, 544x384 pixels)
+- Tile position format: "x;y" as key, with {{"type": "...", "variant": N, "pos": [x, y]}}
+
+**TILE TYPES:**
+- "grass" - solid ground (variants 0-8 for edges/fills)
+- "stone" - solid walls (variants 0-8 for edges/fills)
+- "noportalzone" - blocks portal placement (variant 0)
+- "spikes" - kills player, add "rotation": 0/90/180/270 (variant 0)
+- "spawners" - variant 0 = player spawn point
+
+**OFFGRID ELEMENTS (in "offgrid" array):**
+- Crates: {{"type": "spawners", "variant": 1, "pos": [x, y]}}
+- Springs: {{"type": "spawners", "variant": 3, "pos": [x, y]}}
+- Keys: {{"type": "key", "variant": 0, "pos": [x, y]}}
+- Doors: {{"type": "door", "variant": 0, "pos": [x, y]}}
+
+**PUZZLE DESIGN PRINCIPLES:**
+1. The core mechanic is placing one portal on yourself and one at the cursor, then walking through
+2. Good puzzles require the player to think about WHERE to place the cursor portal
+3. Use noportalzones strategically to limit where portals can be placed
+4. Create gaps the player cannot jump across but CAN portal across
+5. Use vertical sections where the player must portal up/down
+6. Crates can be pushed through portals to reach buttons or block hazards
+7. Springs can launch players into otherwise unreachable areas
+
+**EXAMPLE PUZZLE IDEAS:**
+- Player must portal to a high platform to get a key, then portal back down to the door
+- Player must push a crate through a portal to hold down a pressure plate
+- Player must navigate around noportalzones to find valid portal placement spots
+- Player must use momentum from falling to launch through a portal
+
+**OUTPUT FORMAT:**
+Generate a complete, valid JSON map. Include:
+1. Solid borders (grass/stone walls around edges)
+2. One player spawn point (spawners variant 0)
+3. One door and one key
+4. At least one puzzle element (noportalzone, gap, vertical challenge)
+5. Make sure the puzzle is solvable using the portal mechanic
+
+Generate a [DIFFICULTY: {difficulty}] puzzle map with the theme: {theme}
+
+Return ONLY the JSON object, no markdown formatting, no code blocks, just the raw JSON starting with {{ and ending with }}."""
+        
+        # Call Gemini API
+        response = client.models.generate_content(
+            model="gemini-3-flash-preview", 
+            contents=prompt
+        )
+        
+        # Extract the text response
+        response_text = response.text.strip()
+        
+        # Remove markdown code blocks if present
+        if response_text.startswith("```"):
+            lines = response_text.split('\n')
+            # Remove first and last line (markdown fences)
+            response_text = '\n'.join(lines[1:-1])
+        
+        # Remove leading/trailing whitespace
+        response_text = response_text.strip()
+        
+        # Save to data/maps directory
+        game_dir = os.path.dirname(os.path.abspath(__file__))
+        maps_dir = os.path.join(game_dir, 'data', 'maps')
+        
+        # Use a generated level filename
+        generated_map_path = os.path.join(maps_dir, 'generated_level.json')
+        
+        # Save the raw JSON response to file
+        with open(generated_map_path, 'w', encoding='utf-8') as f:
+            f.write(response_text)
+        
+        print(f"Level JSON response saved to: {generated_map_path}")
+        return generated_map_path
+        
+    except Exception as e:
+        print(f"Error generating level with Gemini API: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
@@ -365,7 +508,30 @@ def run_homepage():
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:  # Left mouse button
                     choice = homepage.handle_click(event.pos)
-                    if choice:
+                    if choice == "GENERATE_LEVEL_START":
+                        # Set loading state and show loading screen
+                        homepage.is_loading = True
+                        
+                        # Render and show loading screen
+                        homepage.render()
+                        scaled_display = pygame.transform.scale(homepage.display, homepage.screen.get_size())
+                        homepage.screen.blit(scaled_display, (0, 0))
+                        pygame.display.update()
+                        
+                        # Generate level (this will block while showing loading screen)
+                        generated_path = generate_level_with_gemini()
+                        
+                        # Clear loading state
+                        homepage.is_loading = False
+                        
+                        if generated_path:
+                            # Return GENERATE_LEVEL - caller should load the generated file
+                            return "GENERATE_LEVEL"
+                        else:
+                            # Generation failed, continue loop to stay on homepage
+                            print("Failed to generate level. Please check your GEMINI_API_KEY environment variable.")
+                            continue
+                    elif choice:
                         # User made a choice, exit loop
                         return choice
         
