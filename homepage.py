@@ -6,7 +6,7 @@ TODO: Integrate this with game.py to replace the direct game start.
 
 The homepage handles:
 - Background rendering
-- Typing animation for title
+- Title animation: type line 1 -> splash reveal "TELEPORTING GOAT" -> type line 3
 - Goat entrance and sprite switching
 - Speech bubble animation
 - Button interactions (Start Game, Select Level, Generate Level)
@@ -17,377 +17,563 @@ import os
 import pygame
 import math
 import json
+import random
 from google import genai
+
 try:
     from dotenv import load_dotenv
     load_dotenv()  # Load .env file if it exists
 except ImportError:
-    # python-dotenv not installed, but that's okay - can still use environment variables directly
     pass
 
 
 class Homepage:
     def __init__(self):
         pygame.init()
-        
+
         # Window and display configuration (matching game.py style)
         pygame.display.set_caption('Portal Puzzle - Homepage')
         self.screen = pygame.display.set_mode((960, 640))
         self.display = pygame.Surface((540, 380), pygame.SRCALPHA)
-        
+
         self.clock = pygame.time.Clock()
-        
+
         # Get paths
         game_dir = os.path.dirname(os.path.abspath(__file__))
         homepage_assets_dir = os.path.join(game_dir, 'data', 'homepage-assets')
-        
+
         # Load assets
         self.background = pygame.image.load(
-            os.path.join(homepage_assets_dir, 'home-bg.jpg')
+            os.path.join(homepage_assets_dir, 'home-bg.png')
         ).convert()
-        # Scale background to match display size
         self.background = pygame.transform.scale(self.background, (540, 380))
-        
+
         # Load goat sprites and scale them down to fit better on screen
         shocked_goat_raw = pygame.image.load(
             os.path.join(homepage_assets_dir, 'shocked_goat.png')
         ).convert_alpha()
-        # Scale goat to slightly smaller size
-        goat_scale = 0.18
-        goat_width = int(shocked_goat_raw.get_width() * goat_scale)
-        goat_height = int(shocked_goat_raw.get_height() * goat_scale)
-        self.shocked_goat = pygame.transform.scale(shocked_goat_raw, (goat_width, goat_height))
-        
+        shocked_goat_scale = 0.25
+        shocked_goat_width = int(shocked_goat_raw.get_width() * shocked_goat_scale)
+        shocked_goat_height = int(shocked_goat_raw.get_height() * shocked_goat_scale)
+        self.shocked_goat = pygame.transform.scale(shocked_goat_raw, (shocked_goat_width, shocked_goat_height))
+
         surprised_goat_raw = pygame.image.load(
             os.path.join(homepage_assets_dir, 'surprised_goat.png')
         ).convert_alpha()
-        self.surprised_goat = pygame.transform.scale(surprised_goat_raw, (goat_width, goat_height))
-        
-        # Calculate goat target position - comes from bottom, positioned slightly down (lower on screen)
-        # Display is 540x380, move goat slightly down (adds small margin from bottom edge)
-        goat_margin_right = 10  # Margin from right edge
-        goat_offset_down = 6  # Small offset to move goat slightly down in visible area
+        surprised_goat_scale = 0.18
+        surprised_goat_width = int(surprised_goat_raw.get_width() * surprised_goat_scale)
+        surprised_goat_height = int(surprised_goat_raw.get_height() * surprised_goat_scale)
+        self.surprised_goat = pygame.transform.scale(surprised_goat_raw, (surprised_goat_width, surprised_goat_height))
+
+        # Goat target position (bottom-right)
+        goat_margin_right = 5
+        goat_offset_down = 17
         self.goat_target_pos = [
-            self.display.get_width() - goat_width - goat_margin_right,  # Right edge with margin
-            self.display.get_height() - goat_height + goat_offset_down  # Slightly down (lower Y = down on screen)
+            self.display.get_width() - surprised_goat_width - goat_margin_right,
+            self.display.get_height() - surprised_goat_height + goat_offset_down
         ]
-        # Set initial goat position to start from bottom center (below screen)
         self.goat_pos = [
-            self.goat_target_pos[0],  # Same x position as target (starts from bottom center horizontally)
-            self.display.get_height()  # Below screen (will move up to target)
+            self.goat_target_pos[0],
+            self.display.get_height()
         ]
-        
-        # Load speech bubble and scale it down
+
+        # Speech bubble
         speech_bubble_raw = pygame.image.load(
             os.path.join(homepage_assets_dir, 'speech_bubble.png')
         ).convert_alpha()
-        # Scale speech bubble to slightly smaller size
         bubble_scale = 0.18
         bubble_width = int(speech_bubble_raw.get_width() * bubble_scale)
         bubble_height = int(speech_bubble_raw.get_height() * bubble_scale)
         self.speech_bubble = pygame.transform.scale(speech_bubble_raw, (bubble_width, bubble_height))
-        
-        # Initialize pixel font using PressStart2P font
-        font_path = os.path.join(game_dir, 'data', 'fonts', 'PressStart2P-vaV7.ttf')
-        self.font = pygame.font.Font(font_path, 8)  # Smaller font for buttons to fit within button
-        # Title font size - reduced to fit longer text
-        self.title_font = pygame.font.Font(font_path, 14)  # Smaller font to fit longer title
-        
+
+        # Fonts - Using Press Start 2P for title and buttons
+        font_path_press_start = os.path.join(game_dir, 'data', 'fonts', 'PressStart2P-vaV7.ttf')
+        self.font = pygame.font.Font(font_path_press_start, 8)          # buttons / small text
+        self.button_font = pygame.font.Font(font_path_press_start, 8)   # button text
+        self.title_font_small = pygame.font.Font(font_path_press_start, 14)  # line 1 / line 3
+        self.title_font_big = pygame.font.Font(font_path_press_start, 20)    # "TELEPORTING GOAT"
+
         # Animation state
         self.elapsed_time = 0.0
-        self.phase = "typing"  # "typing", "goat_entrance", "goat_surprised", "speech_bubble", "idle"
-        
-        # Title text and typing animation (split into 3 lines to fit on screen)
-        self.title_lines = [
-            "The Time I Was Reincarnated As A",
-            "Teleporting Goat In A 2D",
-            "Puzzle Platformer"
-        ]
-        # Track each letter's animation state: (char, line_index, char_index_in_line, appear_time, hop_progress)
-        self.letter_animations = []  # List of tuples: (char, line_idx, char_idx, appear_time, hop_progress)
-        self.typing_speed = 0.035  # seconds between each letter appearing (faster)
-        self.last_letter_time = 0.0
-        self.current_line_idx = 0  # Current line being animated
-        self.current_char_idx = 0  # Current character index in current line
-        self.title_finished = False
-        self.hop_duration = 0.25  # Duration of hop animation in seconds (faster)
-        self.hop_height = 10  # Maximum height of hop in pixels
-        self.title_x = 20  # Left-aligned position (margin from edge)
-        self.title_y = 60  # Top position for first line (added margin at top)
-        
-        # Goat animation state (position is set after goat is loaded, above)
-        self.goat_entrance_speed = 80.0  # pixels per second
+
+        # -----------------------------
+        # TITLE ANIMATION (NEW)
+        # type line1 -> splash mid -> type line3
+        # -----------------------------
+        self.phase = "title_line1"
+
+        self.title_line1 = "THE TIME I REINCARNATED AS A"
+        self.title_mid = "TELEPORTING GOAT"
+        self.title_line3 = "IN A 2D PUZZLE PLATFORMER"
+
+        # Title layout
+        self.title_y = 30  # Moved up from 46
+        self.first_gap = 20  # Spacing between line 1 and line 2 (smaller)
+        self.line_gap = 28  # Spacing between line 2 and line 3
+
+        # Pre-render title surfaces once with matching colors
+        # Lines 1 & 3: white with light blue highlight, dark blue outline
+        # Middle: yellow-orange, thick dark blue outline
+        self.surf_line1 = self._render_outlined(self.title_line1, self.title_font_small, fg=(255, 255, 255), outline=(0, 50, 120), thickness=3)
+        self.surf_mid = self._render_outlined(self.title_mid, self.title_font_big, fg=(255, 200, 50), outline=(0, 50, 120), thickness=4)
+        self.surf_line3 = self._render_outlined(self.title_line3, self.title_font_small, fg=(255, 255, 255), outline=(0, 50, 120), thickness=3)
+
+        # Center the title block
+        self.rect_line1 = self.surf_line1.get_rect(midtop=(self.display.get_width() // 2, self.title_y))
+        self.rect_mid = self.surf_mid.get_rect(midtop=(self.display.get_width() // 2, self.title_y + self.first_gap))
+        self.rect_line3 = self.surf_line3.get_rect(midtop=(self.display.get_width() // 2, self.title_y + self.first_gap + self.line_gap))
+
+        # Typewriter reveal widths
+        self.reveal1 = 0
+        self.reveal3 = 0
+        self.type_speed_px = 900  # pixels per second reveal rate
+
+        # Splash config
+        self.splash_time = 0.55
+        self.hold_time = 0.12
+        self.phase_timer = 0.0
+
+        # Screen shake for splash
+        self.shake = 0.0
+
+        # Confetti particles for the splash (optional but "super extra")
+        self.particles = []
+
+        # Goat animation
+        self.goat_entrance_speed = 150.0
         self.goat_entrance_start_time = 0.0
-        self.goat_entrance_duration = 0.0
         self.goat_is_visible = False
         self.goat_surprised = False
         self.goat_surprised_start_time = 0.0
-        
+
         # Speech bubble
+        self.shocked_offset = (-62, -35)
         self.speech_bubble_visible = False
         self.speech_bubble_start_time = 0.0
-        
+        self.wiggle_trigger_time = 0.0  # When to trigger wiggle after bubble appears
+
         # Button states
         self.show_start_button = True
-        self.show_menu_buttons = False  # Select Level, Generate Level
-        
+        self.show_menu_buttons = False
+
         # Loading state
         self.is_loading = False
         self.loading_text = "Generating level..."
+
+        # Button definitions
+        # Position buttons under the title block, centered like title
+        title_block_height = (self.line_gap * 3) + 6
+        button_y = self.title_y + title_block_height + 3  # Spacing from title
+
+        button_width = 130
+        button_padding = 4  # Vertical padding
+        button_height = 20 + (button_padding * 2)  # Base height + padding
+        button_gap = 15  # Gap between buttons
         
-        # Button definitions (rectangles) - Start button positioned below title, left-aligned
-        # Calculate based on title height: 3 lines of text + spacing
-        title_line_height = 20  # Line spacing matches the rendering (20px)
-        self.start_button_y = self.title_y + (len(self.title_lines) * title_line_height) + 15  # Below title with more spacing
-        # Smaller button size with rounded corners (will be drawn with border_radius)
-        button_width = 140
-        button_height = 28
-        self.start_button_rect = pygame.Rect(self.title_x, self.start_button_y, button_width, button_height)
-        # Select Level and Generate Level buttons appear in the same spot as Start Game button
-        self.select_level_button_rect = pygame.Rect(self.title_x, self.start_button_y, button_width, button_height)
-        self.generate_level_button_rect = pygame.Rect(self.title_x, self.start_button_y, button_width, button_height)
+        # Button interaction state
+        self.mouse_pos = (0, 0)
+        self.hovered_button = None  # "start", "exit", "select_level", "generate_level", or None
+        self.clicked_button = None  # Same as above, cleared after click
+        self.click_anim_time = 0.0  # Time since click for visual feedback
         
-        # Animation timing (in seconds) - faster overall
-        self.GOAT_ENTRANCE_DELAY = 0.7  # Delay after title finishes before goat enters (faster)
-        self.GOAT_SURPRISED_DELAY = 1.0  # Delay after goat reaches position before switching sprite (faster)
-        self.SPEECH_BUBBLE_DELAY = 0.3  # Delay after goat becomes surprised before speech bubble appears (faster)
+        # Calculate total width of both buttons + gap
+        total_button_width = (button_width * 2) + button_gap
+        # Center the button group
+        button_group_x = (self.display.get_width() - total_button_width) // 2
         
+        # Start button (yellow background, blue outline, yellow text)
+        self.start_button_rect = pygame.Rect(button_group_x, button_y, button_width, button_height)
+        
+        # Exit button (red background, blue outline, white text)
+        exit_button_x = button_group_x + button_width + button_gap
+        self.exit_button_rect = pygame.Rect(exit_button_x, button_y, button_width, button_height)
+        
+        # Menu buttons (keep for Select Level, Generate Level)
+        self.select_level_button_rect = pygame.Rect(button_group_x, button_y, button_width, button_height)
+        self.generate_level_button_rect = pygame.Rect(button_group_x, button_y + button_height + 5, button_width, button_height)
+
+        # Timing constants (kept)
+        self.GOAT_ENTRANCE_DELAY = 0.7
+        self.GOAT_SURPRISED_DELAY = 1.0
+        self.SPEECH_BUBBLE_DELAY = 0.3
+
+    # -----------------------------
+    # Helpers
+    # -----------------------------
+    def _render_outlined(self, text, font, fg=(255, 255, 255), outline=(0, 0, 0), thickness=2):
+        base = font.render(text, False, fg).convert_alpha()
+        w, h = base.get_size()
+        surf = pygame.Surface((w + thickness * 2, h + thickness * 2), pygame.SRCALPHA)
+
+        # Outline "stamp"
+        for ox in range(-thickness, thickness + 1):
+            for oy in range(-thickness, thickness + 1):
+                if ox == 0 and oy == 0:
+                    continue
+                # small circle-ish mask
+                if ox * ox + oy * oy <= thickness * thickness:
+                    s = font.render(text, False, outline).convert_alpha()
+                    surf.blit(s, (ox + thickness, oy + thickness))
+
+        surf.blit(base, (thickness, thickness))
+        return surf
+
+    def _spawn_confetti(self, center, n=26):
+        cx, cy = center
+        for _ in range(n):
+            ang = random.uniform(0, math.tau)
+            spd = random.uniform(140, 420)
+            self.particles.append({
+                "x": cx,
+                "y": cy,
+                "vx": math.cos(ang) * spd,
+                "vy": math.sin(ang) * spd - 140,
+                "life": random.uniform(0.35, 0.85),
+            })
+
+    def _update_particles(self, dt):
+        g = 900
+        for p in self.particles:
+            p["life"] -= dt
+            p["vy"] += g * dt
+            p["x"] += p["vx"] * dt
+            p["y"] += p["vy"] * dt
+            p["vx"] *= (0.98 ** (dt * 60))
+        self.particles[:] = [p for p in self.particles if p["life"] > 0]
+
+    def _draw_particles(self):
+        for p in self.particles:
+            pygame.draw.rect(self.display, (255, 255, 255), (int(p["x"]), int(p["y"]), 3, 3))
+
+    # -----------------------------
+    # Update / Render
+    # -----------------------------
     def update(self, dt):
         """Update animation state based on delta time"""
         self.elapsed_time += dt
-        
-        # Phase 1: Letter hopping animation
-        if self.phase == "typing" and not self.title_finished:
-            # Spawn letters one by one with hop animation, line by line
-            if self.current_line_idx < len(self.title_lines):
-                current_line = self.title_lines[self.current_line_idx]
-                if self.current_char_idx < len(current_line):
-                    if self.elapsed_time - self.last_letter_time >= self.typing_speed:
-                        char = current_line[self.current_char_idx]
-                        # Add letter animation (char, line_idx, char_idx, appear_time, hop_progress)
-                        self.letter_animations.append((char, self.current_line_idx, self.current_char_idx, self.elapsed_time, 0.0))
-                        
-                        self.current_char_idx += 1
-                        self.last_letter_time = self.elapsed_time
-                else:
-                    # Move to next line
-                    self.current_line_idx += 1
-                    self.current_char_idx = 0
-            else:
-                # All lines done, wait for animations to finish
-                pass
-            
-            # Update hop animations for all visible letters
-            updated_animations = []
-            for char, line_idx, char_idx, appear_time, _ in self.letter_animations:
-                time_since_appear = self.elapsed_time - appear_time
-                if time_since_appear < self.hop_duration:
-                    # Calculate hop progress (bounce up then down)
-                    hop_progress = time_since_appear / self.hop_duration
-                    if hop_progress < 0.5:
-                        # Going up
-                        hop_progress = hop_progress * 2  # 0 to 1
-                    else:
-                        # Coming down
-                        hop_progress = 1 - ((hop_progress - 0.5) * 2)  # 1 to 0
-                    updated_animations.append((char, line_idx, char_idx, appear_time, hop_progress))
-                else:
-                    # Animation finished, set progress to 0 (normal position)
-                    updated_animations.append((char, line_idx, char_idx, appear_time, 0.0))
-            self.letter_animations = updated_animations
-            
-            # Check if all letters have appeared and animations finished
-            if self.current_line_idx >= len(self.title_lines):
-                # Wait for all hop animations to finish before moving to next phase
-                if all(hop_progress == 0.0 or (self.elapsed_time - appear_time) >= self.hop_duration 
-                       for _, _, _, appear_time, hop_progress in self.letter_animations):
-                    self.title_finished = True
-                    self.phase = "goat_entrance"
-                    self.goat_entrance_start_time = self.elapsed_time + self.GOAT_ENTRANCE_DELAY
-        
-        # Phase 2: Goat entrance (after delay)
+
+        # Confetti always updates
+        self._update_particles(dt)
+
+        # Decay shake (faster decay for quick wiggle effect)
+        self.shake = max(0.0, self.shake - 60.0 * dt)  # Faster decay for quick wiggle
+
+        # Update click animation
+        if self.click_anim_time > 0:
+            self.click_anim_time = max(0.0, self.click_anim_time - dt)
+
+        # -----------------------------
+        # TITLE PHASES
+        # -----------------------------
+        if self.phase.startswith("title"):
+            self.phase_timer += dt
+
+        # 1) TYPE LINE 1
+        if self.phase == "title_line1":
+            self.reveal1 = min(self.surf_line1.get_width(), self.reveal1 + int(self.type_speed_px * dt))
+            if self.reveal1 >= self.surf_line1.get_width():
+                self.phase = "title_hold_before_splash"
+                self.phase_timer = 0.0
+
+        # 2) HOLD
+        elif self.phase == "title_hold_before_splash":
+            if self.phase_timer >= self.hold_time:
+                self.phase = "title_splash"
+                self.phase_timer = 0.0
+                self.shake = 10.0
+                self._spawn_confetti(self.rect_mid.center, n=32)
+
+        # 3) SPLASH MID
+        elif self.phase == "title_splash":
+            if self.phase_timer >= self.splash_time:
+                self.phase = "title_hold_after_splash"
+                self.phase_timer = 0.0
+
+        # 4) HOLD
+        elif self.phase == "title_hold_after_splash":
+            if self.phase_timer >= self.hold_time:
+                self.phase = "title_line3"
+                self.phase_timer = 0.0
+
+        # 5) TYPE LINE 3
+        elif self.phase == "title_line3":
+            self.reveal3 = min(self.surf_line3.get_width(), self.reveal3 + int(self.type_speed_px * dt))
+            if self.reveal3 >= self.surf_line3.get_width():
+                # Title finished -> goat entrance
+                self.phase = "goat_entrance"
+                self.goat_entrance_start_time = self.elapsed_time + self.GOAT_ENTRANCE_DELAY
+
+        # -----------------------------
+        # Goat entrance
+        # -----------------------------
         if self.phase == "goat_entrance":
             if self.elapsed_time >= self.goat_entrance_start_time:
                 if not self.goat_is_visible:
                     self.goat_is_visible = True
-                
-                # Calculate progress (0 to 1) - 1.5 seconds for entrance (faster)
+
                 entrance_elapsed = self.elapsed_time - self.goat_entrance_start_time
-                entrance_progress = min(entrance_elapsed / 1.5, 1.0)
-                
+                entrance_progress = min(entrance_elapsed / 0.65, 1.0)
+
                 if entrance_progress >= 1.0:
-                    # Goat reached position
                     self.goat_pos = self.goat_target_pos.copy()
                     self.phase = "goat_surprised"
                     self.goat_surprised_start_time = self.elapsed_time + self.GOAT_SURPRISED_DELAY
                 else:
-                    # Linear interpolation from bottom (below screen) to target position
-                    # Goat comes from bottom and moves up to target (x stays same, y moves up)
-                    start_y = self.display.get_height()  # Start below screen
-                    self.goat_pos[0] = self.goat_target_pos[0]  # X position stays constant
-                    self.goat_pos[1] = start_y + (self.goat_target_pos[1] - start_y) * entrance_progress
-        
-        # Phase 3: Goat becomes surprised
+                    start_x = self.display.get_width() + 30
+                    start_y = self.display.get_height() + 30
+                    target_x, target_y = self.goat_target_pos
+
+                    self.goat_pos[0] = start_x + (target_x - start_x) * entrance_progress
+                    self.goat_pos[1] = start_y + (target_y - start_y) * entrance_progress
+
+        # Goat becomes surprised
         if self.phase == "goat_surprised":
             if self.elapsed_time >= self.goat_surprised_start_time:
                 self.goat_surprised = True
                 self.phase = "speech_bubble"
                 self.speech_bubble_start_time = self.elapsed_time + self.SPEECH_BUBBLE_DELAY
-        
-        # Phase 4: Speech bubble appears
+
+        # Speech bubble appears
         if self.phase == "speech_bubble":
             if self.elapsed_time >= self.speech_bubble_start_time:
                 self.speech_bubble_visible = True
                 self.phase = "idle"
-    
+                # Schedule wiggle to trigger slightly after bubble appears (immediate)
+                self.wiggle_trigger_time = self.elapsed_time
+        
+        # Trigger quick wiggle slightly after speech bubble appears
+        if self.speech_bubble_visible and self.wiggle_trigger_time > 0:
+            if self.elapsed_time >= self.wiggle_trigger_time:
+                self.shake = 4.0  # Quick wiggle intensity
+                self.wiggle_trigger_time = 0.0  # Reset to prevent retriggering
+
     def render(self):
         """Render all visuals to the pixel canvas"""
-        # Clear display
         self.display.fill((0, 0, 0))
-        
-        # Draw background
         self.display.blit(self.background, (0, 0))
-        
-        # Draw title text with letter hopping animation - each letter appears with a hop
-        # Organize letters by line for proper rendering
-        lines_letters = {}  # {line_idx: [(char, char_idx, hop_progress), ...]}
-        
-        for char, line_idx, char_idx, _, hop_progress in self.letter_animations:
-            if line_idx not in lines_letters:
-                lines_letters[line_idx] = []
-            lines_letters[line_idx].append((char, char_idx, hop_progress))
-        
-        # Render each line
-        for line_idx in sorted(lines_letters.keys()):
-            line_letters = sorted(lines_letters[line_idx], key=lambda x: x[1])  # Sort by char_idx
-            
-            # Calculate base Y position for this line (adjusted spacing for smaller font)
-            line_y = self.title_y + (line_idx * 20)
-            current_x = self.title_x
-            
-            # Render each letter individually with hop offset
-            for char, char_idx, hop_progress in line_letters:
-                # Calculate hop offset (negative Y means up)
-                hop_offset_y = -int(hop_progress * self.hop_height)
-                
-                # Render individual letter
-                letter_surface = self.title_font.render(char, False, (0, 0, 0))
-                letter_y = line_y + hop_offset_y
-                self.display.blit(letter_surface, (current_x, letter_y))
-                
-                # Move x position for next letter
-                current_x += letter_surface.get_width()
-        
-        # Draw goat (if visible)
+
+        # Apply shake offset (only during splash)
+        sx = int(random.uniform(-self.shake, self.shake)) if self.shake > 0 else 0
+        sy = int(random.uniform(-self.shake, self.shake)) if self.shake > 0 else 0
+
+        # -----------------------------
+        # Draw title
+        # -----------------------------
+        # LINE 1 crop reveal
+        if self.reveal1 > 0:
+            crop1 = pygame.Rect(0, 0, self.reveal1, self.surf_line1.get_height())
+            self.display.blit(self.surf_line1, (self.rect_line1.x + sx, self.rect_line1.y + sy), area=crop1)
+
+        # MID splash
+        if self.phase in ("title_splash", "title_hold_after_splash", "title_line3", "goat_entrance", "goat_surprised", "speech_bubble", "idle"):
+            u = 1.0
+            if self.phase == "title_splash":
+                u = min(1.0, self.phase_timer / self.splash_time)
+
+            # nice pop + settle
+            pop = 0.70 + 0.55 * math.sin(min(1.0, u) * math.pi)  # up to ~1.25
+            settle = 1.0 + 0.12 * math.sin(min(1.0, u) * math.pi) * (1.0 - u)
+            scale = (pop * 0.35 + settle * 0.65)
+
+            rot = (math.sin(u * math.pi * 2.2) * 6.0) * (1.0 - u)
+
+            mid_surf = pygame.transform.rotozoom(self.surf_mid, rot, scale)
+            r = mid_surf.get_rect(center=(self.rect_mid.centerx + sx, self.rect_mid.centery + sy))
+            self.display.blit(mid_surf, r)
+
+        # LINE 3 crop reveal
+        if self.phase in ("title_line3", "goat_entrance", "goat_surprised", "speech_bubble", "idle") and self.reveal3 > 0:
+            crop3 = pygame.Rect(0, 0, self.reveal3, self.surf_line3.get_height())
+            self.display.blit(self.surf_line3, (self.rect_line3.x + sx, self.rect_line3.y + sy), area=crop3)
+
+        # Confetti particles
+        self._draw_particles()
+
+        # -----------------------------
+        # Draw goat
+        # -----------------------------
         if self.goat_is_visible:
-            current_goat_sprite = self.surprised_goat if self.goat_surprised else self.shocked_goat
-            self.display.blit(current_goat_sprite, (int(self.goat_pos[0]), int(self.goat_pos[1])))
-        
-        # Draw speech bubble (if visible)
+            current_goat_sprite = self.shocked_goat if self.goat_surprised else self.surprised_goat
+            goat_x = int(self.goat_pos[0])
+            goat_y = int(self.goat_pos[1])
+            if self.goat_surprised:
+                ox, oy = self.shocked_offset
+                goat_x += ox
+                goat_y += oy
+            self.display.blit(current_goat_sprite, (goat_x, goat_y))
+
+        # Speech bubble
         if self.speech_bubble_visible and self.goat_is_visible:
-            # Position speech bubble at top-left of goat image (slightly to the left)
-            bubble_x = int(self.goat_pos[0]) - 110  # More to the left of goat
-            bubble_y = int(self.goat_pos[1]) - self.speech_bubble.get_height() - 8  # Above goat
-            
-            # Clamp bubble position to ensure it's fully visible
+            bubble_x = goat_x - 70
+            bubble_y = goat_y - self.speech_bubble.get_height() + 110
             bubble_x = max(5, min(bubble_x, self.display.get_width() - self.speech_bubble.get_width() - 5))
-            bubble_y = max(5, bubble_y)  # Ensure it's not off the top of the screen
-            
+            bubble_y = max(5, bubble_y)
             self.display.blit(self.speech_bubble, (bubble_x, bubble_y))
-        
-        # Helper function to draw rounded rectangle button
-        def draw_rounded_button(rect, text):
-            # Draw rounded rectangle button (using border_radius parameter in pygame 2.0+)
-            border_radius = 5
-            pygame.draw.rect(self.display, (0, 0, 0), rect, border_radius=border_radius)
-            # Less bold white border (width 1 instead of 2)
-            pygame.draw.rect(self.display, (255, 255, 255), rect, 1, border_radius=border_radius)
-            # White text (no antialiasing for pixelated look)
-            button_text = self.font.render(text, False, (255, 255, 255))
-            text_x = rect.centerx - button_text.get_width() // 2
-            text_y = rect.centery - button_text.get_height() // 2
-            self.display.blit(button_text, (text_x, text_y))
-        
-        # Draw Start Game button
-        if self.show_start_button:
-            draw_rounded_button(self.start_button_rect, "Start Game")
-        
-        # Draw menu buttons (Select Level, Generate Level) - appear in same spot as Start Game
-        if self.show_menu_buttons:
-            # Select Level button (same position as Start Game)
-            draw_rounded_button(self.select_level_button_rect, "Select Level")
+
+        # -----------------------------
+        # Buttons
+        # -----------------------------
+        def draw_button(rect, button_id, text, bg_color, text_color, outline_color=(0, 50, 120)):
+            # Check if hovering
+            is_hovered = (self.hovered_button == button_id)
+            is_clicked = (self.clicked_button == button_id and self.click_anim_time > 0)
             
-            # Generate Level button (appears below Select Level, vertically stacked)
-            # Calculate position below Select Level button
+            # Change background color on hover (similar to level buttons)
+            if is_hovered:
+                # Brighten the color based on button type
+                if button_id == "exit":
+                    # Exit button: brighter red
+                    bg_color = (230, 40, 40)  # Brighter red when hovered
+                elif button_id == "start" or bg_color == (255, 200, 50):  # Start button or yellow buttons
+                    # Yellow buttons: brighter yellow
+                    bg_color = (255, 220, 70)  # Brighter yellow when hovered
+            
+            # Calculate scale (1.05 on hover, 0.95 on click for feedback)
+            scale = 1.0
+            if is_clicked:
+                scale = 0.95  # Slight scale down on click
+            elif is_hovered and button_id != "start":  # Start button doesn't scale
+                scale = 1.05  # Scale up 5% on hover
+            
+            # Apply scale to rect
+            scaled_width = int(rect.width * scale)
+            scaled_height = int(rect.height * scale)
+            scaled_x = rect.centerx - scaled_width // 2
+            scaled_y = rect.centery - scaled_height // 2
+            scaled_rect = pygame.Rect(scaled_x, scaled_y, scaled_width, scaled_height)
+            
+            border_radius = 5  # Rounded corners
+            # Draw button background with rounded corners
+            pygame.draw.rect(self.display, bg_color, scaled_rect, border_radius=border_radius)
+            # Draw blue outline with rounded corners
+            pygame.draw.rect(self.display, outline_color, scaled_rect, 2, border_radius=border_radius)
+            
+            # Render text with smaller button font (size 6)
+            button_text_surf = self.button_font.render(text, False, text_color)
+            
+            # Calculate centered text position
+            text_x = scaled_rect.centerx - button_text_surf.get_width() // 2
+            text_y = scaled_rect.centery - button_text_surf.get_height() // 2
+            
+            # Draw text
+            self.display.blit(button_text_surf, (text_x, text_y))
+
+        # Only show buttons after title animation completes
+        # Title is complete when we're past the title phases
+        title_complete = self.phase not in ("title_line1", "title_hold_before_splash", "title_splash", "title_hold_after_splash", "title_line3")
+        
+        if title_complete:
+            # Exit button: red background, white text, blue outline
+            draw_button(self.exit_button_rect, "exit", "Exit", (200, 20, 20), (255, 255, 255))
+
+            if self.show_start_button:
+                # Start button: yellow background, blue text, blue outline
+                draw_button(self.start_button_rect, "start", "Start Game", (255, 200, 50), (0, 50, 120))
+
+        if self.show_menu_buttons:
+            draw_button(self.select_level_button_rect, "select_level", "Select Level", (255, 200, 50), (0, 50, 120))
+
             generate_rect = pygame.Rect(
                 self.select_level_button_rect.x,
                 self.select_level_button_rect.y + self.select_level_button_rect.height + 5,
                 self.select_level_button_rect.width,
                 self.select_level_button_rect.height
             )
-            draw_rounded_button(generate_rect, "Generate Level")
-            # Update the stored rect for click detection
+            draw_button(generate_rect, "generate_level", "Generate Level", (255, 200, 50), (0, 50, 120))
             self.generate_level_button_rect = generate_rect
-        
-        # Draw loading overlay if loading
+
+        # Loading overlay
         if self.is_loading:
-            # Semi-transparent dark overlay
             overlay = pygame.Surface(self.display.get_size())
             overlay.fill((0, 0, 0))
             overlay.set_alpha(200)
             self.display.blit(overlay, (0, 0))
-            
-            # Loading text
+
             loading_surface = self.font.render(self.loading_text, False, (255, 255, 255))
             loading_x = self.display.get_width() // 2 - loading_surface.get_width() // 2
             loading_y = self.display.get_height() // 2 - loading_surface.get_height() // 2
             self.display.blit(loading_surface, (loading_x, loading_y))
-    
-    def handle_click(self, mouse_pos):
-        """Handle mouse clicks, return choice string or None"""
-        # Ignore clicks while loading
-        if self.is_loading:
-            return None
+
+    def update_hover(self, mouse_pos):
+        """Update which button is being hovered"""
+        # Only detect hover if title animation is complete
+        title_complete = self.phase not in ("title_line1", "title_hold_before_splash", "title_splash", "title_hold_after_splash", "title_line3")
+        if not title_complete:
+            self.hovered_button = None
+            return
         
-        # Convert screen coordinates to display coordinates
+        self.mouse_pos = mouse_pos
         display_x = int((mouse_pos[0] / self.screen.get_width()) * self.display.get_width())
         display_y = int((mouse_pos[1] / self.screen.get_height()) * self.display.get_height())
         display_pos = (display_x, display_y)
-        
-        # Check Start Game button
+
+        self.hovered_button = None
+
+        # Check exit button
+        if self.exit_button_rect.collidepoint(display_pos):
+            self.hovered_button = "exit"
+            return
+
         if self.show_start_button and self.start_button_rect.collidepoint(display_pos):
-            self.show_start_button = False
-            self.show_menu_buttons = True
-            return None  # Don't exit yet, show menu buttons
-        
-        # Check Select Level button
+            self.hovered_button = "start"
+            return
+
+        if self.show_menu_buttons:
+            if self.select_level_button_rect.collidepoint(display_pos):
+                self.hovered_button = "select_level"
+                return
+            if self.generate_level_button_rect.collidepoint(display_pos):
+                self.hovered_button = "generate_level"
+                return
+
+    def handle_click(self, mouse_pos):
+        """Handle mouse clicks, return choice string or None"""
+        if self.is_loading:
+            return None
+
+        # Only handle clicks if title animation is complete
+        title_complete = self.phase not in ("title_line1", "title_hold_before_splash", "title_splash", "title_hold_after_splash", "title_line3")
+        if not title_complete:
+            return None
+
+        display_x = int((mouse_pos[0] / self.screen.get_width()) * self.display.get_width())
+        display_y = int((mouse_pos[1] / self.screen.get_height()) * self.display.get_height())
+        display_pos = (display_x, display_y)
+
+        # Visual feedback - set clicked button briefly
+        self.clicked_button = self.hovered_button
+        self.click_anim_time = 0.15  # Click animation duration
+
+        # Check exit button
+        if self.exit_button_rect.collidepoint(display_pos):
+            return "QUIT"
+
+        if self.show_start_button and self.start_button_rect.collidepoint(display_pos):
+            return "SELECT_LEVEL"
+
         if self.show_menu_buttons and self.select_level_button_rect.collidepoint(display_pos):
             return "SELECT_LEVEL"
-        
-        # Check Generate Level button
+
         if self.show_menu_buttons and self.generate_level_button_rect.collidepoint(display_pos):
-            # Return a special value to trigger generation with loading screen in the main loop
             return "GENERATE_LEVEL_START"
-        
+
         return None
 
 
 def generate_level_with_gemini(difficulty="medium", theme="classic puzzle"):
     """
     Generate a level using the Gemini API.
-    
+
     Args:
         difficulty: "easy", "medium", or "hard"
         theme: A theme description for the level
-    
+
     Returns:
         str: Path to the generated level JSON file, or None if generation failed
     """
     try:
-        # The client gets the API key from the environment variable `GEMINI_API_KEY`.
         client = genai.Client()
-        
-        # Construct the prompt
+
         prompt = f"""You are a level designer for a 2D puzzle platformer with a unique portal mechanic. The player can place two linked portals - one always surrounds the player, and one follows the cursor. When the player enters one portal, they teleport to the other.
 
 **GAME MECHANICS:**
@@ -427,12 +613,6 @@ def generate_level_with_gemini(difficulty="medium", theme="classic puzzle"):
 6. Crates can be pushed through portals to reach buttons or block hazards
 7. Springs can launch players into otherwise unreachable areas
 
-**EXAMPLE PUZZLE IDEAS:**
-- Player must portal to a high platform to get a key, then portal back down to the door
-- Player must push a crate through a portal to hold down a pressure plate
-- Player must navigate around noportalzones to find valid portal placement spots
-- Player must use momentum from falling to launch through a portal
-
 **OUTPUT FORMAT:**
 Generate a complete, valid JSON map. Include:
 1. Solid borders (grass/stone walls around edges)
@@ -445,26 +625,20 @@ Generate a [DIFFICULTY: {difficulty}] puzzle map with the theme: {theme}
 
 Return ONLY the JSON object, no markdown formatting, no code blocks, just the raw JSON starting with {{ and ending with }}.
 Increase the door's x and y position by one."""
-        
-        # Call Gemini API
+
         response = client.models.generate_content(
-            model="gemini-3-flash-preview", 
+            model="gemini-3-flash-preview",
             contents=prompt
         )
-        
-        # Extract the text response
+
         response_text = response.text.strip()
-        
-        # Remove markdown code blocks if present
+
         if response_text.startswith("```"):
             lines = response_text.split('\n')
-            # Remove first and last line (markdown fences)
             response_text = '\n'.join(lines[1:-1])
-        
-        # Remove leading/trailing whitespace
+
         response_text = response_text.strip()
-        
-        # Save to data/maps directory
+
         game_dir = os.path.dirname(os.path.abspath(__file__))
         maps_dir = os.path.join(game_dir, 'data', 'maps')
         
@@ -480,10 +654,10 @@ Increase the door's x and y position by one."""
         # Save the raw JSON response to file
         with open(generated_map_path, 'w', encoding='utf-8') as f:
             f.write(response_text)
-        
+
         print(f"Level JSON response saved to: {generated_map_path}")
         return generated_map_path
-        
+
     except Exception as e:
         print(f"Error generating level with Gemini API: {e}")
         import traceback
@@ -494,69 +668,57 @@ Increase the door's x and y position by one."""
 def run_homepage():
     """
     Main homepage loop. Handles animations and button interactions.
-    
+
     Returns:
         str: User's choice - "SELECT_LEVEL", "GENERATE_LEVEL", or "QUIT"
     """
     homepage = Homepage()
-    running = True
-    
-    while running:
-        # Calculate delta time
-        dt = homepage.clock.tick(60) / 1000.0  # Convert to seconds
-        
-        # Update animations
+
+    while True:
+        dt = homepage.clock.tick(60) / 1000.0
         homepage.update(dt)
-        
-        # Handle events
+
+        # Track mouse position continuously for hover
+        homepage.update_hover(pygame.mouse.get_pos())
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return "QUIT"
-            
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                if event.button == 1:  # Left mouse button
-                    choice = homepage.handle_click(event.pos)
-                    if choice == "GENERATE_LEVEL_START":
-                        # Set loading state and show loading screen
-                        homepage.is_loading = True
-                        
-                        # Render and show loading screen
-                        homepage.render()
-                        scaled_display = pygame.transform.scale(homepage.display, homepage.screen.get_size())
-                        homepage.screen.blit(scaled_display, (0, 0))
-                        pygame.display.update()
-                        
-                        # Generate level (this will block while showing loading screen)
-                        generated_path = generate_level_with_gemini()
-                        
-                        # Clear loading state
-                        homepage.is_loading = False
-                        
-                        if generated_path:
-                            # Return GENERATE_LEVEL - caller should load the generated file
-                            return "GENERATE_LEVEL"
-                        else:
-                            # Generation failed, continue loop to stay on homepage
-                            print("Failed to generate level. Please check your GEMINI_API_KEY environment variable.")
-                            continue
-                    elif choice:
-                        # User made a choice, exit loop
-                        return choice
-        
-        # Render
+
+            # Track mouse position for hover detection
+            if event.type == pygame.MOUSEMOTION:
+                homepage.update_hover(event.pos)
+
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                choice = homepage.handle_click(event.pos)
+
+                if choice == "GENERATE_LEVEL_START":
+                    homepage.is_loading = True
+
+                    homepage.render()
+                    scaled_display = pygame.transform.scale(homepage.display, homepage.screen.get_size())
+                    homepage.screen.blit(scaled_display, (0, 0))
+                    pygame.display.update()
+
+                    generated_path = generate_level_with_gemini()
+
+                    homepage.is_loading = False
+
+                    if generated_path:
+                        return "GENERATE_LEVEL"
+                    else:
+                        print("Failed to generate level. Please check your GEMINI_API_KEY environment variable.")
+                        continue
+
+                elif choice:
+                    return choice
+
         homepage.render()
-        
-        # Scale pixel canvas to screen size (maintaining pixelated look)
         scaled_display = pygame.transform.scale(homepage.display, homepage.screen.get_size())
         homepage.screen.blit(scaled_display, (0, 0))
         pygame.display.update()
-    
-    return "QUIT"
 
 
-# Temporary: This file is runnable separately right now for testing
-# TODO: Integrate this with game.py - call run_homepage() from game.py's main entry point
-#       and handle the returned choice string to load appropriate game state
 if __name__ == "__main__":
     choice = run_homepage()
     print(f"Homepage returned: {choice}")
