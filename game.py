@@ -10,7 +10,7 @@ from scripts.portal import Portal
 
 
 class Game:
-    def __init__(self):
+    def __init__(self, level_path=None):
         pygame.init()
 
         pygame.display.set_caption('Portal Puzzle')
@@ -41,17 +41,8 @@ class Game:
         spring_horizontal_img = pygame.image.load(os.path.join(game_dir, 'data', 'images', 'spring_horizontal.png')).convert_alpha()
 
         # Load cursor image
-        cursor_img = pygame.image.load(os.path.join(game_dir, 'data', 'images', 'cursor.png')).convert_alpha()
-        
-        # Load jump sound effect
-        try:
-            jump_sound_path = os.path.join(game_dir, 'data', 'audio', 'jump.wav')
-            if os.path.exists(jump_sound_path):
-                self.jump_sound = pygame.mixer.Sound(jump_sound_path)
-            else:
-                self.jump_sound = None
-        except:
-            self.jump_sound = None
+        cursor_img = pygame.image.load(os.path.join(game_dir, 'data', 'images', 'cursor.png'))
+        cursor_img = cursor_img.convert_alpha()
 
         # Load portal sprites
         portal_red_images = load_images('portal_red')
@@ -82,7 +73,7 @@ class Game:
         self.player = Player(self, (50, 50), (8, 15))
 
         self.tilemap = Tilemap(self, tile_size=16)
-        
+
         # Store cursor image and hide default cursor
         self.cursor_img = cursor_img
         pygame.mouse.set_visible(False)
@@ -108,7 +99,11 @@ class Game:
         self.has_key = False  # Whether player has collected the key
         self.room_has_key = False  # Whether the current room has a key
 
-        self.level = 0
+        # Load level from path if provided, otherwise default to level 0
+        if level_path is not None:
+            self.level = level_path
+        else:
+            self.level = 0
         self.load_level(self.level)
 
         self.scroll = [0, 0]
@@ -120,6 +115,23 @@ class Game:
         self.transition_type = None  # 'death' or 'win'
         self.transition_progress = 0  # 0 to 1
         self.transition_duration = 60  # frames for fade in + out
+                
+        # Win screen system
+        self.win_screen_time = 0.0  # Time since win screen appeared
+        self.win_screen_duration = 2.0  # Show win screen for 2 seconds
+
+        # Pause system
+        self.paused = False
+        font_path = os.path.join(game_dir, 'data', 'fonts', 'PressStart2P-vaV7.ttf')
+        self.pause_font = pygame.font.Font(font_path, 12)  # Font for pause menu
+        
+        # Pause menu buttons
+        menu_x = self.display.get_width() // 2 - 70
+        menu_y = self.display.get_height() // 2 - 20
+        button_width = 140
+        button_height = 30
+        self.resume_button_rect = pygame.Rect(menu_x, menu_y, button_width, button_height)
+        self.quit_button_rect = pygame.Rect(menu_x, menu_y + button_height + 10, button_width, button_height)
 
     def load_level(self, map_id_or_path):
         # Get the game directory
@@ -304,7 +316,10 @@ class Game:
         except:
             pass  # Music file might not exist
 
+        dt = 0.0  # Delta time for frame updates
         while True:
+            dt = self.clock.tick(60) / 1000.0  # Get dt from tick
+            
             self.display.fill((0, 0, 0, 0))
             self.display_2.blit(self.assets['background'], (0, 0))
 
@@ -313,30 +328,39 @@ class Game:
             self.mouse_pos[0] = (mouse_x / self.screen.get_width()) * self.display.get_width() + self.scroll[0]
             self.mouse_pos[1] = (mouse_y / self.screen.get_height()) * self.display.get_height() + self.scroll[1]
 
-            # Update portals
-            self.player_portal.update(self.player.rect().center)
-            self.cursor_portal.update(self.mouse_pos)
+            # Only update game logic if not paused
+            if not self.paused:
+                # Update portals
+                self.player_portal.update(self.player.rect().center)
+                self.cursor_portal.update(self.mouse_pos)
 
-            # Check if cursor or cursor portal overlaps with any noportalzone tile
-            cursor_in_noportalzone = self.is_in_noportalzone(self.mouse_pos)
-            cursor_portal_rect = self.cursor_portal.get_rect()
-            cursor_portal_in_noportalzone = self.portal_overlaps_noportalzone(cursor_portal_rect)
-            cursor_portal_encompassed_by_solid = self.portal_fully_encompassed_by_solid(cursor_portal_rect)
-            portal_placement_blocked = cursor_in_noportalzone or cursor_portal_in_noportalzone or cursor_portal_encompassed_by_solid
+                # Check if cursor or cursor portal overlaps with any noportalzone tile
+                cursor_in_noportalzone = self.is_in_noportalzone(self.mouse_pos)
+                cursor_portal_rect = self.cursor_portal.get_rect()
+                cursor_portal_in_noportalzone = self.portal_overlaps_noportalzone(cursor_portal_rect)
+                cursor_portal_encompassed_by_solid = self.portal_fully_encompassed_by_solid(cursor_portal_rect)
+                portal_placement_blocked = cursor_in_noportalzone or cursor_portal_in_noportalzone or cursor_portal_encompassed_by_solid
+            else:
+                # When paused, use previous values for rendering
+                cursor_portal_rect = self.cursor_portal.get_rect()
+                cursor_portal_in_noportalzone = False
+                cursor_portal_encompassed_by_solid = False
+                portal_placement_blocked = False
 
-            # Check button presses
-            for button in self.buttons:
-                button['pressed'] = False
-                button_rect = pygame.Rect(button['pos'][0], button['pos'][1], button['size'][0], button['size'][1])
+            if not self.paused:
+                # Check button presses
+                for button in self.buttons:
+                    button['pressed'] = False
+                    button_rect = pygame.Rect(button['pos'][0], button['pos'][1], button['size'][0], button['size'][1])
 
-                # Check player
-                if button_rect.colliderect(self.player.rect()):
-                    button['pressed'] = True
+                    # Check player
+                    if button_rect.colliderect(self.player.rect()):
+                        button['pressed'] = True
 
-            # Check if all buttons are pressed (open exit)
-            self.exit_open = all(button['pressed'] for button in self.buttons) if self.buttons else False
+                # Check if all buttons are pressed (open exit)
+                self.exit_open = all(button['pressed'] for button in self.buttons) if self.buttons else False
 
-            # Update springs (check for pushing before updating)
+                # Update springs (check for pushing before updating)
             for spring in self.springs:
                 # Check if player is pushing the spring horizontally
                 if not self.dead:
@@ -463,10 +487,8 @@ class Game:
                                 bounding_rect.height
                             )
                             if player_rect.colliderect(door_rect):
-                                # Load levelselect.json
-                                game_dir = os.path.dirname(os.path.abspath(__file__))
-                                levelselect_path = os.path.join(game_dir, 'data', 'maps', 'levelselect.json')
-                                self.load_level(levelselect_path)
+                                # Trigger win condition
+                                self.won = True
                                 break
 
                     # Check door tiles in offgrid_tiles
@@ -480,10 +502,8 @@ class Game:
                                 bounding_rect.height
                             )
                             if player_rect.colliderect(door_rect):
-                                # Load levelselect.json
-                                game_dir = os.path.dirname(os.path.abspath(__file__))
-                                levelselect_path = os.path.join(game_dir, 'data', 'maps', 'levelselect.json')
-                                self.load_level(levelselect_path)
+                                # Trigger win condition
+                                self.won = True
                                 break
 
             # Check spring_horizontal (horizontal launcher) collisions
@@ -531,12 +551,13 @@ class Game:
             # Render tilemap
             self.tilemap.render(self.display, offset=render_scroll)
 
-            # Update crates (check for pushing before updating)
-            for crate in self.crates:
-                # Check if player is pushing the crate
-                if not self.dead:
-                    player_rect = self.player.rect()
-                    crate_rect = crate.rect()
+            if not self.paused:
+                # Update crates (check for pushing before updating)
+                for crate in self.crates:
+                    # Check if player is pushing the crate
+                    if not self.dead:
+                        player_rect = self.player.rect()
+                        crate_rect = crate.rect()
 
                     # Check if player is colliding with crate and moving horizontally
                     if player_rect.colliderect(crate_rect):
@@ -575,24 +596,24 @@ class Game:
                                 else:
                                     crate.velocity[0] = 0  # Stop crate if it would hit a wall
 
-                # Update crate with gravity (but no movement input)
-                if not crate.teleported_this_frame:
-                    crate.update(self.tilemap, movement=(0, 0))
-                    # Check portal teleport for crates
-                    if self.check_portal_teleport(crate):
-                        crate.teleported_this_frame = True
-                else:
-                    crate.teleported_this_frame = False
+                    # Update crate with gravity (but no movement input)
+                    if not crate.teleported_this_frame:
+                        crate.update(self.tilemap, movement=(0, 0))
+                        # Check portal teleport for crates
+                        if self.check_portal_teleport(crate):
+                            crate.teleported_this_frame = True
+                    else:
+                        crate.teleported_this_frame = False
 
-            # Update player (with crates as colliders for collision detection)
-            if not self.dead:
-                if not self.player.teleported_this_frame:
-                    self.player.update(self.tilemap, (self.movement[1] - self.movement[0], 0), additional_colliders=self.crates)
-                    # Check portal teleport for player
-                    if self.check_portal_teleport(self.player):
-                        self.player.teleported_this_frame = True
-                else:
-                    self.player.teleported_this_frame = False
+                # Update player (with crates as colliders for collision detection)
+                if not self.dead:
+                    if not self.player.teleported_this_frame:
+                        self.player.update(self.tilemap, (self.movement[1] - self.movement[0], 0), additional_colliders=self.crates)
+                        # Check portal teleport for player
+                        if self.check_portal_teleport(self.player):
+                            self.player.teleported_this_frame = True
+                    else:
+                        self.player.teleported_this_frame = False
 
             # Render crates
             for crate in self.crates:
@@ -679,9 +700,11 @@ class Game:
             # Handle events
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-                    pygame.quit()
-                    sys.exit()
+                    return "QUIT"
                 if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        # Escape key returns to level selection
+                        return "BACK_TO_SELECT"
                     if event.key == pygame.K_LEFT or event.key == pygame.K_a:
                         self.movement[0] = True
                     if event.key == pygame.K_RIGHT or event.key == pygame.K_d:
@@ -694,10 +717,13 @@ class Game:
                     if event.key == pygame.K_r:
                         # Restart level
                         self.load_level(self.level)
+                    if event.key == pygame.K_p:
+                        # Toggle pause
+                        self.paused = not self.paused
                     # Enter portal mode when shift is pressed - automatically enters red mode
                     # Only if cursor is not in a blocked zone
                     if event.key == pygame.K_LSHIFT or event.key == pygame.K_RSHIFT:
-                        if not portal_placement_blocked:
+                        if not portal_placement_blocked and not self.paused:
                             self.portal_mode = True
                             # Automatically lock portals in red mode
                             self.player_portal.lock('left')  # 'left' = red
@@ -716,8 +742,24 @@ class Game:
                         self.cursor_portal.unlock()
                         self.current_portal_color = None
                 if event.type == pygame.MOUSEBUTTONDOWN:
+                    # Handle pause menu clicks
+                    if self.paused and event.button == 1:  # Left click
+                        # Convert screen coordinates to display coordinates
+                        mouse_x, mouse_y = pygame.mouse.get_pos()
+                        display_x = int((mouse_x / self.screen.get_width()) * self.display.get_width())
+                        display_y = int((mouse_y / self.screen.get_height()) * self.display.get_height())
+                        display_pos = (display_x, display_y)
+                        
+                        if self.resume_button_rect.collidepoint(display_pos):
+                            self.paused = False
+                        elif self.quit_button_rect.collidepoint(display_pos):
+                            # Load levelselect.json
+                            game_dir = os.path.dirname(os.path.abspath(__file__))
+                            levelselect_path = os.path.join(game_dir, 'data', 'maps', 'levelselect.json')
+                            self.load_level(levelselect_path)
+                            self.paused = False
                     # Only handle portal color cycling if in portal mode (shift held)
-                    if self.portal_mode:
+                    elif self.portal_mode:
                         # Block portal placement if cursor or cursor portal is over noportalzone
                         if portal_placement_blocked:
                             pass  # Do nothing, portal placement is disabled
@@ -747,55 +789,6 @@ class Game:
                     if self.transition_type == 'death':
                         self.load_level(self.level)
                         self.dead = 0
-                    elif self.transition_type == 'win':
-                        # Load levelselect.json map instead of next level
-                        game_dir = os.path.dirname(os.path.abspath(__file__))
-                        levelselect_path = os.path.join(game_dir, 'data', 'maps', 'levelselect.json')
-                        self.tilemap.load(levelselect_path)
-
-                        # Reset portals
-                        self.player_portal.unlock()
-                        self.cursor_portal.unlock()
-
-                        # Reset game elements
-                        self.crates = []
-                        self.buttons = []
-                        self.springs = []
-                        self.exit_door = None
-                        self.exit_open = False
-                        self.keys = []
-                        self.doors = []
-                        self.has_key = False
-
-                        # Extract spawners from levelselect
-                        for spawner in self.tilemap.extract([('spawners', 0), ('spawners', 1), ('spawners', 2), 
-                                                             ('spawners', 3), ('spawners', 6), ('spawners', 7)]):
-                            variant = spawner['variant']
-                            pos = spawner['pos']
-
-                            if variant == 0:  # Player spawn
-                                self.player.pos = pos
-                                self.player.air_time = 0
-                                self.player.velocity = [0, 0]
-                            elif variant == 1:  # Crate spawn
-                                self.crates.append(Crate(self, pos))
-                            elif variant == 2:  # Button
-                                self.buttons.append({'pos': pos, 'size': (16, 8), 'pressed': False})
-                            elif variant == 3:  # Spring (bottom attached, launches upward)
-                                self.springs.append(Spring(self, pos))
-                            elif variant == 7:  # Exit door
-                                self.exit_door = {'pos': pos, 'size': (16, 32)}
-
-                        # Extract keys and doors from offgrid tiles
-                        for tile in self.tilemap.offgrid_tiles:
-                            if tile['type'] == 'key':
-                                self.keys.append(tile)
-                            elif tile['type'] == 'door':
-                                self.doors.append(tile)
-
-                        self.scroll = [0, 0]
-                        self.dead = 0
-                        self.won = False
                     self.transition_type = None
 
             # Handle death - start transition if not already active
@@ -804,16 +797,26 @@ class Game:
                 self.transition_type = 'death'
                 self.transition_progress = 0
 
-            # Handle win - start transition if not already active
-            if self.won and not self.transition_active:
-                self.transition_active = True
-                self.transition_type = 'win'
-                self.transition_progress = 0
+            # Handle win - show win screen
+            win_fade_alpha = 0
+            if self.won:
+                # Update win screen timer
+                self.win_screen_time += dt
+                
+                # Calculate fade-out: start fading in last 0.3 seconds
+                fade_start_time = self.win_screen_duration - 0.3
+                if self.win_screen_time >= fade_start_time:
+                    fade_progress = min((self.win_screen_time - fade_start_time) / 0.3, 1.0)
+                    win_fade_alpha = int(fade_progress * 255)
+                
+                # Auto-return after win screen duration (and fully faded)
+                if self.win_screen_time >= self.win_screen_duration and win_fade_alpha >= 255:
+                    return "BACK_TO_SELECT"
 
             self.display_2.blit(self.display, (0, 0))
 
-            # Render transition overlay
-            if self.transition_active:
+            # Render transition overlay (only for death, not win)
+            if self.transition_active and self.transition_type != 'win':
                 # Calculate fade alpha: fade in to black (0 -> 255) in first half, stay black in second half
                 if self.transition_progress < 0.5:
                     # Fade in: 0 to 1 (0% to 50% of transition)
@@ -828,7 +831,148 @@ class Game:
                 overlay.set_alpha(fade_alpha)
                 self.display_2.blit(overlay, (0, 0))
 
+            # Render pause menu overlay
+            if self.paused:
+                # Semi-transparent dark overlay
+                pause_overlay = pygame.Surface(self.display_2.get_size())
+                pause_overlay.fill((0, 0, 0))
+                pause_overlay.set_alpha(180)
+                self.display_2.blit(pause_overlay, (0, 0))
+                
+                # Draw pause menu buttons
+                def draw_pause_button(rect, text):
+                    # Draw button background
+                    pygame.draw.rect(self.display_2, (50, 50, 50), rect)
+                    pygame.draw.rect(self.display_2, (255, 255, 255), rect, 2)
+                    # Draw button text
+                    button_text = self.pause_font.render(text, False, (255, 255, 255))
+                    text_x = rect.centerx - button_text.get_width() // 2
+                    text_y = rect.centery - button_text.get_height() // 2
+                    self.display_2.blit(button_text, (text_x, text_y))
+                
+                # Draw "PAUSED" title
+                paused_text = self.pause_font.render("PAUSED", False, (255, 255, 255))
+                paused_x = self.display_2.get_width() // 2 - paused_text.get_width() // 2
+                paused_y = self.resume_button_rect.y - 40
+                self.display_2.blit(paused_text, (paused_x, paused_y))
+                
+                # Scale button rects to display_2 coordinates
+                resume_rect = pygame.Rect(
+                    int(self.resume_button_rect.x * (self.display_2.get_width() / self.display.get_width())),
+                    int(self.resume_button_rect.y * (self.display_2.get_height() / self.display.get_height())),
+                    int(self.resume_button_rect.width * (self.display_2.get_width() / self.display.get_width())),
+                    int(self.resume_button_rect.height * (self.display_2.get_height() / self.display.get_height()))
+                )
+                quit_rect = pygame.Rect(
+                    int(self.quit_button_rect.x * (self.display_2.get_width() / self.display.get_width())),
+                    int(self.quit_button_rect.y * (self.display_2.get_height() / self.display.get_height())),
+                    int(self.quit_button_rect.width * (self.display_2.get_width() / self.display.get_width())),
+                    int(self.quit_button_rect.height * (self.display_2.get_height() / self.display.get_height()))
+                )
+                
+                draw_pause_button(resume_rect, "RESUME")
+                draw_pause_button(quit_rect, "QUIT")
+
             self.screen.blit(pygame.transform.scale(self.display_2, self.screen.get_size()), (0, 0))
+            
+            # Render win screen overlay
+            if self.won:
+                # Load winning background image
+                game_dir = os.path.dirname(os.path.abspath(__file__))
+                winning_bg_path = os.path.join(game_dir, 'data', 'homepage-assets', 'winning_bg.png')
+                try:
+                    winning_bg = pygame.image.load(winning_bg_path).convert()
+                    winning_bg = pygame.transform.scale(winning_bg, self.screen.get_size())
+                    # Draw winning background to cover the screen
+                    self.screen.blit(winning_bg, (0, 0))
+                except:
+                    # Fallback if image not found - show semi-transparent overlay
+                    overlay = pygame.Surface(self.screen.get_size(), pygame.SRCALPHA)
+                    overlay.fill((0, 0, 0, 180))
+                    self.screen.blit(overlay, (0, 0))
+                
+                # Load fonts for text
+                font_path = os.path.join(game_dir, 'data', 'fonts', 'PressStart2P-vaV7.ttf')
+                try:
+                    title_font = pygame.font.Font(font_path, 32)  # Increased from 24 to 32
+                    message_font = pygame.font.Font(font_path, 16)  # Increased from 8 to 16 (doubled)
+                except:
+                    title_font = pygame.font.Font(None, 64)
+                    message_font = pygame.font.Font(None, 48)
+                
+                # Helper function to render outlined text
+                def render_outlined(text, font, fg, outline, thickness=2):
+                    base = font.render(text, False, fg).convert_alpha()
+                    w, h = base.get_size()
+                    surf = pygame.Surface((w + thickness * 2, h + thickness * 2), pygame.SRCALPHA)
+                    # Outline
+                    for ox in range(-thickness, thickness + 1):
+                        for oy in range(-thickness, thickness + 1):
+                            if ox * ox + oy * oy <= thickness * thickness:
+                                if ox != 0 or oy != 0:
+                                    s = font.render(text, False, outline).convert_alpha()
+                                    surf.blit(s, (ox + thickness, oy + thickness))
+                    surf.blit(base, (thickness, thickness))
+                    return surf
+                
+                # Render both texts with outline to get their sizes
+                title_text = "The Goat Prevails!"
+                title_color = (255, 215, 0)  # Gold color for winning
+                title_outline = (0, 0, 0)  # Black outline
+                title_surf = render_outlined(title_text, title_font, title_color, title_outline, thickness=3)
+                
+                # Split message into multiple lines to fit on page
+                message_line1 = "You have completed the level!"
+                message_line2 = ""
+                message_color = (255, 215, 0)  # Gold color for winning
+                message_outline = (0, 0, 0)  # Black outline
+                message_surf1 = render_outlined(message_line1, message_font, message_color, message_outline, thickness=2)
+                message_surf2 = render_outlined(message_line2, message_font, message_color, message_outline, thickness=2)
+                
+                # Calculate combined message height
+                line_spacing = 10
+                message_total_width = max(message_surf1.get_width(), message_surf2.get_width())
+                message_total_height = message_surf1.get_height() + message_surf2.get_height() + line_spacing
+                
+                # Calculate rectangle dimensions to fit both title and message with bigger padding
+                padding = 50  # Increased padding for bigger rectangle
+                spacing = 30  # Space between title and message
+                rect_width = max(title_surf.get_width(), message_total_width) + (padding * 2)
+                rect_height = title_surf.get_height() + message_total_height + spacing + (padding * 2)
+                rect_x = (self.screen.get_width() - rect_width) // 2
+                rect_y = (self.screen.get_height() - rect_height) // 2
+                
+                # Draw semi-transparent light gray rounded rectangle
+                rect_surf = pygame.Surface((rect_width, rect_height), pygame.SRCALPHA)
+                gray_color = (220, 220, 220)  # Light gray
+                pygame.draw.rect(rect_surf, gray_color, (0, 0, rect_width, rect_height), border_radius=15)
+                rect_surf.set_alpha(220)  # Slightly opaque (about 86% opacity)
+                self.screen.blit(rect_surf, (rect_x, rect_y))
+                
+                # Calculate vertical positions inside the rectangle
+                content_start_y = rect_y + padding
+                title_y = content_start_y
+                message_start_y = title_y + title_surf.get_height() - 6 + spacing  # Adjust for outline offset
+                
+                # Render title centered in the rectangle
+                title_x = rect_x + (rect_width - title_surf.get_width()) // 2
+                self.screen.blit(title_surf, (title_x, title_y))
+                
+                # Render message lines centered in the rectangle
+                message_line1_x = rect_x + (rect_width - message_surf1.get_width()) // 2
+                message_line1_y = message_start_y
+                self.screen.blit(message_surf1, (message_line1_x, message_line1_y))
+                
+                message_line2_x = rect_x + (rect_width - message_surf2.get_width()) // 2
+                message_line2_y = message_line1_y + message_surf1.get_height() + line_spacing
+                self.screen.blit(message_surf2, (message_line2_x, message_line2_y))
+                
+                # Apply fade-out overlay if fading
+                if win_fade_alpha > 0:
+                    fade_overlay = pygame.Surface(self.screen.get_size())
+                    fade_overlay.fill((0, 0, 0))
+                    fade_overlay.set_alpha(win_fade_alpha)
+                    self.screen.blit(fade_overlay, (0, 0))
             
             # Render custom cursor at mouse position (centered)
             mouse_x, mouse_y = pygame.mouse.get_pos()
@@ -837,6 +981,7 @@ class Game:
             self.screen.blit(self.cursor_img, (cursor_x, cursor_y))
             
             pygame.display.update()
-            self.clock.tick(60)
 
-Game().run()
+
+if __name__ == "__main__":
+    Game().run()
