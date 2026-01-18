@@ -42,6 +42,16 @@ class Game:
 
         # Load cursor image
         cursor_img = pygame.image.load(os.path.join(game_dir, 'data', 'images', 'cursor.png')).convert_alpha()
+        
+        # Load jump sound effect
+        try:
+            jump_sound_path = os.path.join(game_dir, 'data', 'audio', 'jump.wav')
+            if os.path.exists(jump_sound_path):
+                self.jump_sound = pygame.mixer.Sound(jump_sound_path)
+            else:
+                self.jump_sound = None
+        except:
+            self.jump_sound = None
 
         # Load portal sprites
         portal_red_images = load_images('portal_red')
@@ -678,7 +688,9 @@ class Game:
                         self.movement[1] = True
                     if event.key == pygame.K_UP or event.key == pygame.K_w or event.key == pygame.K_SPACE:
                         if self.player.jump():
-                            pass
+                            # Play jump sound effect
+                            if self.jump_sound:
+                                self.jump_sound.play()
                     if event.key == pygame.K_r:
                         # Restart level
                         self.load_level(self.level)
