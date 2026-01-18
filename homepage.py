@@ -1,5 +1,5 @@
 """
-Homepage/Title Screen for The Time I Was A Goat Teleporting In A 2D Puzzle Platformer
+Homepage/Title Screen for The Time I Was Reincarnated As A Teleporting Goat In A 2D Puzzle Platformer
 
 This file is runnable separately right now for testing purposes.
 TODO: Integrate this with game.py to replace the direct game start.
@@ -82,26 +82,27 @@ class Homepage:
         # Initialize pixel font using PressStart2P font
         font_path = os.path.join(game_dir, 'data', 'fonts', 'PressStart2P-vaV7.ttf')
         self.font = pygame.font.Font(font_path, 8)  # Smaller font for buttons to fit within button
-        # Title font size - larger for better visibility
-        self.title_font = pygame.font.Font(font_path, 18)  # Bigger font size for title
+        # Title font size - reduced to fit longer text
+        self.title_font = pygame.font.Font(font_path, 14)  # Smaller font to fit longer title
         
         # Animation state
         self.elapsed_time = 0.0
         self.phase = "typing"  # "typing", "goat_entrance", "goat_surprised", "speech_bubble", "idle"
         
-        # Title text and typing animation (split into 2 lines)
+        # Title text and typing animation (split into 3 lines to fit on screen)
         self.title_lines = [
-            "The Time I was a Teleporting Goat in a",
-            "2D Puzzle Platformer"
+            "The Time I Was Reincarnated As A",
+            "Teleporting Goat In A 2D",
+            "Puzzle Platformer"
         ]
         # Track each letter's animation state: (char, line_index, char_index_in_line, appear_time, hop_progress)
         self.letter_animations = []  # List of tuples: (char, line_idx, char_idx, appear_time, hop_progress)
-        self.typing_speed = 0.05  # seconds between each letter appearing
+        self.typing_speed = 0.035  # seconds between each letter appearing (faster)
         self.last_letter_time = 0.0
         self.current_line_idx = 0  # Current line being animated
         self.current_char_idx = 0  # Current character index in current line
         self.title_finished = False
-        self.hop_duration = 0.3  # Duration of hop animation in seconds
+        self.hop_duration = 0.25  # Duration of hop animation in seconds (faster)
         self.hop_height = 10  # Maximum height of hop in pixels
         self.title_x = 20  # Left-aligned position (margin from edge)
         self.title_y = 60  # Top position for first line (added margin at top)
@@ -123,8 +124,8 @@ class Homepage:
         self.show_menu_buttons = False  # Select Level, Generate Level
         
         # Button definitions (rectangles) - Start button positioned below title, left-aligned
-        # Calculate based on title height: 2 lines of text + spacing
-        title_line_height = 24  # Line spacing matches the rendering (24px)
+        # Calculate based on title height: 3 lines of text + spacing
+        title_line_height = 20  # Line spacing matches the rendering (20px)
         self.start_button_y = self.title_y + (len(self.title_lines) * title_line_height) + 15  # Below title with more spacing
         # Smaller button size with rounded corners (will be drawn with border_radius)
         button_width = 140
@@ -134,10 +135,10 @@ class Homepage:
         self.select_level_button_rect = pygame.Rect(self.title_x, self.start_button_y, button_width, button_height)
         self.generate_level_button_rect = pygame.Rect(self.title_x, self.start_button_y, button_width, button_height)
         
-        # Animation timing (in seconds)
-        self.GOAT_ENTRANCE_DELAY = 1.0  # Delay after title finishes before goat enters
-        self.GOAT_SURPRISED_DELAY = 1.5  # Delay after goat reaches position before switching sprite
-        self.SPEECH_BUBBLE_DELAY = 0.5  # Delay after goat becomes surprised before speech bubble appears
+        # Animation timing (in seconds) - faster overall
+        self.GOAT_ENTRANCE_DELAY = 0.7  # Delay after title finishes before goat enters (faster)
+        self.GOAT_SURPRISED_DELAY = 1.0  # Delay after goat reaches position before switching sprite (faster)
+        self.SPEECH_BUBBLE_DELAY = 0.3  # Delay after goat becomes surprised before speech bubble appears (faster)
         
     def update(self, dt):
         """Update animation state based on delta time"""
@@ -198,9 +199,9 @@ class Homepage:
                 if not self.goat_is_visible:
                     self.goat_is_visible = True
                 
-                # Calculate progress (0 to 1) - 2 seconds for entrance
+                # Calculate progress (0 to 1) - 1.5 seconds for entrance (faster)
                 entrance_elapsed = self.elapsed_time - self.goat_entrance_start_time
-                entrance_progress = min(entrance_elapsed / 2.0, 1.0)
+                entrance_progress = min(entrance_elapsed / 1.5, 1.0)
                 
                 if entrance_progress >= 1.0:
                     # Goat reached position
@@ -248,8 +249,8 @@ class Homepage:
         for line_idx in sorted(lines_letters.keys()):
             line_letters = sorted(lines_letters[line_idx], key=lambda x: x[1])  # Sort by char_idx
             
-            # Calculate base Y position for this line
-            line_y = self.title_y + (line_idx * 24)
+            # Calculate base Y position for this line (adjusted spacing for smaller font)
+            line_y = self.title_y + (line_idx * 20)
             current_x = self.title_x
             
             # Render each letter individually with hop offset
