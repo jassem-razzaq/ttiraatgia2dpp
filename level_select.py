@@ -127,11 +127,20 @@ class LevelSelect:
     def _calculate_max_scrolls(self):
         """Calculate maximum scroll offsets for each column"""
         button_spacing = self.button_height + self.button_gap
-        total_standard_height = len(self.standard_levels) * button_spacing
-        self.max_standard_scroll = max(0, total_standard_height - self.column_height)
+        # Max scroll should allow viewing the last max_visible levels
+        # When scrolled to max, we want to see the last max_visible items
+        if len(self.standard_levels) > self.max_visible:
+            # Scroll to show last max_visible levels: start_index = len - max_visible
+            start_index_at_max = len(self.standard_levels) - self.max_visible
+            self.max_standard_scroll = start_index_at_max * button_spacing
+        else:
+            self.max_standard_scroll = 0
         
-        total_gemini_height = len(self.gemini_levels) * button_spacing
-        self.max_gemini_scroll = max(0, total_gemini_height - self.column_height)
+        if len(self.gemini_levels) > self.max_visible:
+            start_index_at_max = len(self.gemini_levels) - self.max_visible
+            self.max_gemini_scroll = start_index_at_max * button_spacing
+        else:
+            self.max_gemini_scroll = 0
     
     def _get_visible_levels(self, levels, scroll, max_scroll):
         """Get the levels that should be visible based on scroll position"""

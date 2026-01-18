@@ -344,7 +344,7 @@ class Homepage:
         # Trigger quick wiggle slightly after speech bubble appears
         if self.speech_bubble_visible and self.wiggle_trigger_time > 0:
             if self.elapsed_time >= self.wiggle_trigger_time:
-                self.shake = 4.0  # Quick wiggle intensity
+                self.shake = 8.0  # More pronounced wiggle intensity
                 self.wiggle_trigger_time = 0.0  # Reset to prevent retriggering
 
     def render(self):
@@ -438,8 +438,9 @@ class Homepage:
             # Apply scale to rect
             scaled_width = int(rect.width * scale)
             scaled_height = int(rect.height * scale)
-            scaled_x = rect.centerx - scaled_width // 2
-            scaled_y = rect.centery - scaled_height // 2
+            # Apply shake offset to buttons (same as title - use sx, sy from outer scope)
+            scaled_x = rect.centerx - scaled_width // 2 + sx
+            scaled_y = rect.centery - scaled_height // 2 + sy
             scaled_rect = pygame.Rect(scaled_x, scaled_y, scaled_width, scaled_height)
             
             border_radius = 5  # Rounded corners

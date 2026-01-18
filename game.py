@@ -796,12 +796,19 @@ class Game:
                 self.transition_progress = 0
 
             # Handle win - show win screen
+            win_fade_alpha = 0
             if self.won:
                 # Update win screen timer
                 self.win_screen_time += dt
                 
-                # Auto-return after win screen duration
-                if self.win_screen_time >= self.win_screen_duration:
+                # Calculate fade-out: start fading in last 0.3 seconds
+                fade_start_time = self.win_screen_duration - 0.3
+                if self.win_screen_time >= fade_start_time:
+                    fade_progress = min((self.win_screen_time - fade_start_time) / 0.3, 1.0)
+                    win_fade_alpha = int(fade_progress * 255)
+                
+                # Auto-return after win screen duration (and fully faded)
+                if self.win_screen_time >= self.win_screen_duration and win_fade_alpha >= 255:
                     return "BACK_TO_SELECT"
 
             self.display_2.blit(self.display, (0, 0))
@@ -957,6 +964,13 @@ class Game:
                 message_line2_x = rect_x + (rect_width - message_surf2.get_width()) // 2
                 message_line2_y = message_line1_y + message_surf1.get_height() + line_spacing
                 self.screen.blit(message_surf2, (message_line2_x, message_line2_y))
+                
+                # Apply fade-out overlay if fading
+                if win_fade_alpha > 0:
+                    fade_overlay = pygame.Surface(self.screen.get_size())
+                    fade_overlay.fill((0, 0, 0))
+                    fade_overlay.set_alpha(win_fade_alpha)
+                    self.screen.blit(fade_overlay, (0, 0))
             
             # Render custom cursor at mouse position (centered)
             mouse_x, mouse_y = pygame.mouse.get_pos()
