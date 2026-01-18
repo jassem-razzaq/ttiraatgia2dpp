@@ -111,6 +111,19 @@ class Game:
         self.transition_type = None  # 'death' or 'win'
         self.transition_progress = 0  # 0 to 1
         self.transition_duration = 60  # frames for fade in + out
+        
+        # Pause system
+        self.paused = False
+        font_path = os.path.join(game_dir, 'data', 'fonts', 'PressStart2P-vaV7.ttf')
+        self.pause_font = pygame.font.Font(font_path, 12)  # Font for pause menu
+        
+        # Pause menu buttons
+        menu_x = self.display.get_width() // 2 - 70
+        menu_y = self.display.get_height() // 2 - 20
+        button_width = 140
+        button_height = 30
+        self.resume_button_rect = pygame.Rect(menu_x, menu_y, button_width, button_height)
+        self.quit_button_rect = pygame.Rect(menu_x, menu_y + button_height + 10, button_width, button_height)
 
     def load_level(self, map_id_or_path):
         # Get the game directory
@@ -304,30 +317,39 @@ class Game:
             self.mouse_pos[0] = (mouse_x / self.screen.get_width()) * self.display.get_width() + self.scroll[0]
             self.mouse_pos[1] = (mouse_y / self.screen.get_height()) * self.display.get_height() + self.scroll[1]
 
-            # Update portals
-            self.player_portal.update(self.player.rect().center)
-            self.cursor_portal.update(self.mouse_pos)
+            # Only update game logic if not paused
+            if not self.paused:
+                # Update portals
+                self.player_portal.update(self.player.rect().center)
+                self.cursor_portal.update(self.mouse_pos)
 
-            # Check if cursor or cursor portal overlaps with any noportalzone tile
-            cursor_in_noportalzone = self.is_in_noportalzone(self.mouse_pos)
-            cursor_portal_rect = self.cursor_portal.get_rect()
-            cursor_portal_in_noportalzone = self.portal_overlaps_noportalzone(cursor_portal_rect)
-            cursor_portal_encompassed_by_solid = self.portal_fully_encompassed_by_solid(cursor_portal_rect)
-            portal_placement_blocked = cursor_in_noportalzone or cursor_portal_in_noportalzone or cursor_portal_encompassed_by_solid
+                # Check if cursor or cursor portal overlaps with any noportalzone tile
+                cursor_in_noportalzone = self.is_in_noportalzone(self.mouse_pos)
+                cursor_portal_rect = self.cursor_portal.get_rect()
+                cursor_portal_in_noportalzone = self.portal_overlaps_noportalzone(cursor_portal_rect)
+                cursor_portal_encompassed_by_solid = self.portal_fully_encompassed_by_solid(cursor_portal_rect)
+                portal_placement_blocked = cursor_in_noportalzone or cursor_portal_in_noportalzone or cursor_portal_encompassed_by_solid
+            else:
+                # When paused, use previous values for rendering
+                cursor_portal_rect = self.cursor_portal.get_rect()
+                cursor_portal_in_noportalzone = False
+                cursor_portal_encompassed_by_solid = False
+                portal_placement_blocked = False
 
-            # Check button presses
-            for button in self.buttons:
-                button['pressed'] = False
-                button_rect = pygame.Rect(button['pos'][0], button['pos'][1], button['size'][0], button['size'][1])
+            if not self.paused:
+                # Check button presses
+                for button in self.buttons:
+                    button['pressed'] = False
+                    button_rect = pygame.Rect(button['pos'][0], button['pos'][1], button['size'][0], button['size'][1])
 
-                # Check player
-                if button_rect.colliderect(self.player.rect()):
-                    button['pressed'] = True
+                    # Check player
+                    if button_rect.colliderect(self.player.rect()):
+                        button['pressed'] = True
 
-            # Check if all buttons are pressed (open exit)
-            self.exit_open = all(button['pressed'] for button in self.buttons) if self.buttons else False
+                # Check if all buttons are pressed (open exit)
+                self.exit_open = all(button['pressed'] for button in self.buttons) if self.buttons else False
 
-            # Update springs (check for pushing before updating)
+                # Update springs (check for pushing before updating)
             for spring in self.springs:
                 # Check if player is pushing the spring horizontally
                 if not self.dead:
@@ -522,12 +544,13 @@ class Game:
             # Render tilemap
             self.tilemap.render(self.display, offset=render_scroll)
 
-            # Update crates (check for pushing before updating)
-            for crate in self.crates:
-                # Check if player is pushing the crate
-                if not self.dead:
-                    player_rect = self.player.rect()
-                    crate_rect = crate.rect()
+            if not self.paused:
+                # Update crates (check for pushing before updating)
+                for crate in self.crates:
+                    # Check if player is pushing the crate
+                    if not self.dead:
+                        player_rect = self.player.rect()
+                        crate_rect = crate.rect()
 
                     # Check if player is colliding with crate and moving horizontally
                     if player_rect.colliderect(crate_rect):
@@ -566,24 +589,24 @@ class Game:
                                 else:
                                     crate.velocity[0] = 0  # Stop crate if it would hit a wall
 
-                # Update crate with gravity (but no movement input)
-                if not crate.teleported_this_frame:
-                    crate.update(self.tilemap, movement=(0, 0))
-                    # Check portal teleport for crates
-                    if self.check_portal_teleport(crate):
-                        crate.teleported_this_frame = True
-                else:
-                    crate.teleported_this_frame = False
+                    # Update crate with gravity (but no movement input)
+                    if not crate.teleported_this_frame:
+                        crate.update(self.tilemap, movement=(0, 0))
+                        # Check portal teleport for crates
+                        if self.check_portal_teleport(crate):
+                            crate.teleported_this_frame = True
+                    else:
+                        crate.teleported_this_frame = False
 
-            # Update player (with crates as colliders for collision detection)
-            if not self.dead:
-                if not self.player.teleported_this_frame:
-                    self.player.update(self.tilemap, (self.movement[1] - self.movement[0], 0), additional_colliders=self.crates)
-                    # Check portal teleport for player
-                    if self.check_portal_teleport(self.player):
-                        self.player.teleported_this_frame = True
-                else:
-                    self.player.teleported_this_frame = False
+                # Update player (with crates as colliders for collision detection)
+                if not self.dead:
+                    if not self.player.teleported_this_frame:
+                        self.player.update(self.tilemap, (self.movement[1] - self.movement[0], 0), additional_colliders=self.crates)
+                        # Check portal teleport for player
+                        if self.check_portal_teleport(self.player):
+                            self.player.teleported_this_frame = True
+                    else:
+                        self.player.teleported_this_frame = False
 
             # Render crates
             for crate in self.crates:
@@ -683,10 +706,13 @@ class Game:
                     if event.key == pygame.K_r:
                         # Restart level
                         self.load_level(self.level)
+                    if event.key == pygame.K_p:
+                        # Toggle pause
+                        self.paused = not self.paused
                     # Enter portal mode when shift is pressed - automatically enters red mode
                     # Only if cursor is not in a blocked zone
                     if event.key == pygame.K_LSHIFT or event.key == pygame.K_RSHIFT:
-                        if not portal_placement_blocked:
+                        if not portal_placement_blocked and not self.paused:
                             self.portal_mode = True
                             # Automatically lock portals in red mode
                             self.player_portal.lock('left')  # 'left' = red
@@ -705,8 +731,24 @@ class Game:
                         self.cursor_portal.unlock()
                         self.current_portal_color = None
                 if event.type == pygame.MOUSEBUTTONDOWN:
+                    # Handle pause menu clicks
+                    if self.paused and event.button == 1:  # Left click
+                        # Convert screen coordinates to display coordinates
+                        mouse_x, mouse_y = pygame.mouse.get_pos()
+                        display_x = int((mouse_x / self.screen.get_width()) * self.display.get_width())
+                        display_y = int((mouse_y / self.screen.get_height()) * self.display.get_height())
+                        display_pos = (display_x, display_y)
+                        
+                        if self.resume_button_rect.collidepoint(display_pos):
+                            self.paused = False
+                        elif self.quit_button_rect.collidepoint(display_pos):
+                            # Load levelselect.json
+                            game_dir = os.path.dirname(os.path.abspath(__file__))
+                            levelselect_path = os.path.join(game_dir, 'data', 'maps', 'levelselect.json')
+                            self.load_level(levelselect_path)
+                            self.paused = False
                     # Only handle portal color cycling if in portal mode (shift held)
-                    if self.portal_mode:
+                    elif self.portal_mode:
                         # Block portal placement if cursor or cursor portal is over noportalzone
                         if portal_placement_blocked:
                             pass  # Do nothing, portal placement is disabled
@@ -816,6 +858,48 @@ class Game:
                 overlay.fill((0, 0, 0))
                 overlay.set_alpha(fade_alpha)
                 self.display_2.blit(overlay, (0, 0))
+
+            # Render pause menu overlay
+            if self.paused:
+                # Semi-transparent dark overlay
+                pause_overlay = pygame.Surface(self.display_2.get_size())
+                pause_overlay.fill((0, 0, 0))
+                pause_overlay.set_alpha(180)
+                self.display_2.blit(pause_overlay, (0, 0))
+                
+                # Draw pause menu buttons
+                def draw_pause_button(rect, text):
+                    # Draw button background
+                    pygame.draw.rect(self.display_2, (50, 50, 50), rect)
+                    pygame.draw.rect(self.display_2, (255, 255, 255), rect, 2)
+                    # Draw button text
+                    button_text = self.pause_font.render(text, False, (255, 255, 255))
+                    text_x = rect.centerx - button_text.get_width() // 2
+                    text_y = rect.centery - button_text.get_height() // 2
+                    self.display_2.blit(button_text, (text_x, text_y))
+                
+                # Draw "PAUSED" title
+                paused_text = self.pause_font.render("PAUSED", False, (255, 255, 255))
+                paused_x = self.display_2.get_width() // 2 - paused_text.get_width() // 2
+                paused_y = self.resume_button_rect.y - 40
+                self.display_2.blit(paused_text, (paused_x, paused_y))
+                
+                # Scale button rects to display_2 coordinates
+                resume_rect = pygame.Rect(
+                    int(self.resume_button_rect.x * (self.display_2.get_width() / self.display.get_width())),
+                    int(self.resume_button_rect.y * (self.display_2.get_height() / self.display.get_height())),
+                    int(self.resume_button_rect.width * (self.display_2.get_width() / self.display.get_width())),
+                    int(self.resume_button_rect.height * (self.display_2.get_height() / self.display.get_height()))
+                )
+                quit_rect = pygame.Rect(
+                    int(self.quit_button_rect.x * (self.display_2.get_width() / self.display.get_width())),
+                    int(self.quit_button_rect.y * (self.display_2.get_height() / self.display.get_height())),
+                    int(self.quit_button_rect.width * (self.display_2.get_width() / self.display.get_width())),
+                    int(self.quit_button_rect.height * (self.display_2.get_height() / self.display.get_height()))
+                )
+                
+                draw_pause_button(resume_rect, "RESUME")
+                draw_pause_button(quit_rect, "QUIT")
 
             self.screen.blit(pygame.transform.scale(self.display_2, self.screen.get_size()), (0, 0))
             

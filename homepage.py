@@ -443,7 +443,8 @@ Generate a complete, valid JSON map. Include:
 
 Generate a [DIFFICULTY: {difficulty}] puzzle map with the theme: {theme}
 
-Return ONLY the JSON object, no markdown formatting, no code blocks, just the raw JSON starting with {{ and ending with }}."""
+Return ONLY the JSON object, no markdown formatting, no code blocks, just the raw JSON starting with {{ and ending with }}.
+Increase the door's x and y position by one."""
         
         # Call Gemini API
         response = client.models.generate_content(
