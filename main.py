@@ -33,7 +33,16 @@ def run_logo(screen):
         logo_image = pygame.image.load(logo_image_path).convert()
     except:
         return
-    
+
+    # Load logo sfx
+    logo_sfx_path = os.path.join(game_dir, 'data', 'audio', 'logo_sfx.mp3')
+    try:
+        logo_sfx = pygame.mixer.Sound(logo_sfx_path)
+    except:
+        logo_sfx = None
+    # Adjust logo sfx volume
+    if logo_sfx:
+        logo_sfx.set_volume(0.3)
 
     # Get screen dimensions
     screen_width, screen_height = screen.get_size()
@@ -59,6 +68,8 @@ def run_logo(screen):
                 
         screen.fill((0, 0, 0))
         screen.blit(logo_image, (x_offset, 0))
+        if logo_sfx:
+            logo_sfx.play()
         pygame.display.update()
         pygame.time.delay(2250)
         return
