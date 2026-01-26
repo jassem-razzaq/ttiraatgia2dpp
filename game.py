@@ -457,7 +457,7 @@ class Game:
                 cursor_portal_in_noportalzone = self.portal_overlaps_noportalzone(cursor_portal_rect)
                 cursor_portal_encompassed_by_solid = self.portal_fully_encompassed_by_solid(cursor_portal_rect)
                 cursor_over_solid = self.cursor_over_solid_tile(self.mouse_pos)
-                portal_placement_blocked = cursor_in_noportalzone or cursor_portal_in_noportalzone or cursor_portal_encompassed_by_solid
+                portal_placement_blocked = cursor_in_noportalzone or cursor_portal_in_noportalzone or cursor_portal_encompassed_by_solid or cursor_over_solid
             else:
                 # When paused, use previous values for rendering
                 cursor_portal_rect = self.cursor_portal.get_rect()
