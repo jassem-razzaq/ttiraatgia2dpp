@@ -16,6 +16,52 @@ from homepage import run_homepage
 from level_select import run_level_select
 from game import Game
 
+def run_logo(screen):
+    """
+    Show the logo screen.
+    
+    Args:
+        screen: pygame screen surface
+    Returns:
+        None (when logo is skipped or completes)
+    """
+    
+    # Load logo image
+    game_dir = os.path.dirname(os.path.abspath(__file__))
+    logo_image_path = os.path.join(game_dir, 'data', 'images', 'jpw_logo.png')
+    try:
+        logo_image = pygame.image.load(logo_image_path).convert()
+    except:
+        return
+    
+
+    # Get screen dimensions
+    screen_width, screen_height = screen.get_size()
+    
+    # Scale image with zoom out (smaller than screen width for black bars)
+    image_width = logo_image.get_width()
+    image_height = logo_image.get_height()
+    zoom_factor = 0.75  # Zoom out to 75% (adjust this value to change zoom level)
+    scaled_width = int(screen_width * zoom_factor)
+    scale_factor = scaled_width / image_width
+    scaled_height = int(image_height * scale_factor)
+    
+    logo_image = pygame.transform.scale(logo_image, (scaled_width, scaled_height))
+    
+    # Calculate horizontal offset to center the image (creates black bars on sides)
+    x_offset = (screen_width - scaled_width) // 2
+    
+    
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                sys.exit(0)
+                
+        screen.fill((0, 0, 0))
+        screen.blit(logo_image, (x_offset, 0))
+        pygame.display.update()
+        pygame.time.delay(2250)
+        return
 
 def run_introduction(screen):
     """
@@ -240,9 +286,11 @@ def main():
     
     # Set up screen (matching homepage/game dimensions)
     screen = pygame.display.set_mode((960, 640))
-    pygame.display.set_caption('Portal Puzzle')
+    pygame.display.set_caption('The Time I Reincarnated as a Teleporting Goat in a 2D Puzzle Platformer')
     
-    # Show introduction screen first (only on first run)
+    # Show logo and introduction screen first (only on first run)
+    fade_transition(duration=1, fade_out=True)
+    run_logo(screen)
     run_introduction(screen)
     
     while True:
