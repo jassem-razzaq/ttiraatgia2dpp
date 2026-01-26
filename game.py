@@ -13,7 +13,7 @@ class Game:
     def __init__(self, level_path=None):
         pygame.init()
 
-        pygame.display.set_caption('Portal Puzzle')
+        pygame.display.set_caption('The Time I Reincarnated as a Teleporting Goat in a 2D Puzzle Platformer')
         self.screen = pygame.display.set_mode((960, 640))
         self.display = pygame.Surface((540, 380), pygame.SRCALPHA)
         self.display_2 = pygame.Surface((540, 380))
