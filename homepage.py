@@ -155,6 +155,7 @@ class Homepage:
 
         # Button states
         self.show_start_button = True
+        self.show_credits_button = True
         self.show_menu_buttons = False
 
         # Loading state
@@ -184,6 +185,9 @@ class Homepage:
         
         # Start button (yellow background, blue outline, yellow text)
         self.start_button_rect = pygame.Rect(button_group_x, button_y, button_width, button_height)
+
+        # Credits button (yellow background, blue outline, yellow text)
+        self.credits_button_rect = pygame.Rect(button_group_x + 70, button_y + button_height + 5, button_width, button_height)
         
         # Exit button (red background, blue outline, white text)
         exit_button_x = button_group_x + button_width + button_gap
@@ -503,6 +507,10 @@ class Homepage:
                 # Start button: yellow background, blue text, blue outline
                 draw_button(self.start_button_rect, "start", "Start Game", (255, 200, 50), (0, 50, 120))
 
+            if self.show_credits_button:
+                # Credits button: yellow background, blue text, blue outline
+                draw_button(self.credits_button_rect, "credits", "Credits", (255, 200, 50), (0, 50, 120))
+
         if self.show_menu_buttons:
             draw_button(self.select_level_button_rect, "select_level", "Select Level", (255, 200, 50), (0, 50, 120))
 
@@ -551,6 +559,10 @@ class Homepage:
             self.hovered_button = "start"
             return
 
+        if self.show_credits_button and self.credits_button_rect.collidepoint(display_pos):
+            self.hovered_button = "credits"
+            return
+
         if self.show_menu_buttons:
             if self.select_level_button_rect.collidepoint(display_pos):
                 self.hovered_button = "select_level"
@@ -583,6 +595,9 @@ class Homepage:
 
         if self.show_start_button and self.start_button_rect.collidepoint(display_pos):
             return "SELECT_LEVEL"
+
+        if self.show_credits_button and self.credits_button_rect.collidepoint(display_pos):
+            return "CREDITS"
 
         if self.show_menu_buttons and self.select_level_button_rect.collidepoint(display_pos):
             return "SELECT_LEVEL"
@@ -703,7 +718,7 @@ def run_homepage():
     Main homepage loop. Handles animations and button interactions.
 
     Returns:
-        str: User's choice - "SELECT_LEVEL", "GENERATE_LEVEL", or "QUIT"
+        str: User's choice - "SELECT_LEVEL", "GENERATE_LEVEL", "CREDITS", or "QUIT"
     """
     homepage = Homepage()
 
@@ -742,6 +757,9 @@ def run_homepage():
                     else:
                         print("Failed to generate level. Please check your GEMINI_API_KEY environment variable.")
                         continue
+
+                elif choice == "CREDITS":
+                    return "CREDITS"
 
                 elif choice:
                     return choice
