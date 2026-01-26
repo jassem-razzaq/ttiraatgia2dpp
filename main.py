@@ -41,7 +41,7 @@ def run_logo(screen):
     # Scale image with zoom out (smaller than screen width for black bars)
     image_width = logo_image.get_width()
     image_height = logo_image.get_height()
-    zoom_factor = 0.75  # Zoom out to 75% (adjust this value to change zoom level)
+    zoom_factor = 1.00  # Zoom out to 75% (adjust this value to change zoom level)
     scaled_width = int(screen_width * zoom_factor)
     scale_factor = scaled_width / image_width
     scaled_height = int(image_height * scale_factor)
