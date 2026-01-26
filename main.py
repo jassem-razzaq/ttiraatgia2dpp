@@ -376,6 +376,14 @@ def main():
             # Stop menu music when quitting
             pygame.mixer.music.stop()
             break
+        elif choice == "CREDITS":
+            # Stop menu music when showing credits
+            pygame.mixer.music.stop()
+            # Fade out from homepage
+            fade_transition(duration=0.25, fade_out=True)
+            run_credits(screen)
+            # Fade in to homepage after credits
+            fade_transition(duration=0.25, fade_out=False)
         elif choice == "SELECT_LEVEL":
             # Fade out from homepage (keep music playing - it continues in level selection)
             fade_transition(duration=0.25, fade_out=True)
