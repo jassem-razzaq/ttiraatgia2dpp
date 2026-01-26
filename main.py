@@ -186,7 +186,7 @@ def run_introduction(screen):
     except:
         skip_font = pygame.font.Font(None, 16)
     
-    skip_text = skip_font.render("(press any button to skip)", False, (255, 255, 255))
+    skip_text = skip_font.render("(press SHIFT to skip)", False, (255, 255, 255))
     skip_text_padding = 10
     skip_text_x = screen_width - skip_text.get_width() - skip_text_padding
     skip_text_y = screen_height - skip_text.get_height() - skip_text_padding
@@ -209,9 +209,10 @@ def run_introduction(screen):
                         pygame.mixer.music.stop()
                     sys.exit(0)  # Exit game entirely on close button
                 if event.type == pygame.KEYDOWN:
-                    if music_playing:
-                        pygame.mixer.music.stop()
-                    return  # Skip on any key press
+                    if event.key == pygame.K_LSHIFT or event.key == pygame.K_RSHIFT:
+                        if music_playing:
+                            pygame.mixer.music.stop()
+                        return  
             
             screen.fill((0, 0, 0))
             y_offset = (screen_height - scaled_height) // 2
@@ -236,9 +237,10 @@ def run_introduction(screen):
                         pygame.mixer.music.stop()
                     sys.exit(0)  # Exit game entirely on close button
                 if event.type == pygame.KEYDOWN:
-                    if music_playing:
-                        pygame.mixer.music.stop()
-                    return  # Skip on any key press
+                    if event.key == pygame.K_LSHIFT or event.key == pygame.K_RSHIFT:
+                        if music_playing:
+                            pygame.mixer.music.stop()
+                        return  
             
             # Clear screen
             screen.fill((0, 0, 0))
@@ -353,6 +355,14 @@ def main():
     screen = pygame.display.set_mode((960, 640))
     pygame.display.set_caption('The Time I Reincarnated as a Teleporting Goat in a 2D Puzzle Platformer')
     
+    game_dir = os.path.dirname(os.path.abspath(__file__))
+    favicon_path = os.path.join(game_dir, 'data', 'homepage-assets', 'shocked_goat.png')
+    try:
+        icon = pygame.image.load(favicon_path)
+        pygame.display.set_icon(icon)
+    except:
+        pass 
+
     # Show logo and introduction screen first (only on first run)
     fade_transition(duration=1, fade_out=True)
     run_logo(screen)
@@ -362,14 +372,6 @@ def main():
         # Start at homepage
         choice = run_homepage()
         
-        if choice == "CREDITS":
-            # Stop menu music when showing credits
-            pygame.mixer.music.stop()
-            # Fade out from homepage
-            fade_transition(duration=0.25, fade_out=True)
-            run_credits(screen)
-            # Fade in to homepage after credits
-            fade_transition(duration=0.25, fade_out=False)
         if choice == "QUIT":
             # Stop menu music when quitting
             pygame.mixer.music.stop()
@@ -420,7 +422,6 @@ def main():
             fade_transition(duration=0.25, fade_out=True)
             
             # Run the generated level (it's always at generated_level.json)
-            import os
             game_dir = os.path.dirname(os.path.abspath(__file__))
             generated_path = os.path.join(game_dir, 'data', 'maps', 'generated_level.json')
             game_result = run_game(generated_path)

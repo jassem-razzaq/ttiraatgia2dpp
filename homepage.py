@@ -32,7 +32,7 @@ class Homepage:
         pygame.init()
 
         # Window and display configuration (matching game.py style)
-        pygame.display.set_caption('Portal Puzzle - Homepage')
+        pygame.display.set_caption('The Time I Reincarnated as a Teleporting Goat in a 2D Puzzle Platformer')
         self.screen = pygame.display.set_mode((960, 640))
         self.display = pygame.Surface((540, 380), pygame.SRCALPHA)
 
@@ -468,7 +468,7 @@ class Homepage:
             scale = 1.0
             if is_clicked:
                 scale = 0.95  # Slight scale down on click
-            elif is_hovered and button_id != "start":  # Start button doesn't scale
+            elif is_hovered:  # Start button doesn't scale
                 scale = 1.05  # Scale up 5% on hover
             
             # Apply scale to rect
