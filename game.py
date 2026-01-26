@@ -47,6 +47,13 @@ class Game:
         # Load control images
         left_mouse_img = pygame.image.load(os.path.join(game_dir, 'data', 'images', 'controls', 'left_mouse.png')).convert_alpha()
         right_mouse_img = pygame.image.load(os.path.join(game_dir, 'data', 'images', 'controls', 'right_mouse.png')).convert_alpha()
+        a_button_img = pygame.image.load(os.path.join(game_dir, 'data', 'images', 'controls', 'a_button.png')).convert_alpha()
+        d_button_img = pygame.image.load(os.path.join(game_dir, 'data', 'images', 'controls', 'd_button.png')).convert_alpha()
+        w_button_img = pygame.image.load(os.path.join(game_dir, 'data', 'images', 'controls', 'w_button.png')).convert_alpha()
+        scale_factor = 0.75
+        a_button_img = pygame.transform.scale(a_button_img, (int(a_button_img.get_width() * scale_factor), int(a_button_img.get_height() * scale_factor)))
+        d_button_img = pygame.transform.scale(d_button_img, (int(d_button_img.get_width() * scale_factor), int(d_button_img.get_height() * scale_factor)))
+        w_button_img = pygame.transform.scale(w_button_img, (int(w_button_img.get_width() * scale_factor), int(w_button_img.get_height() * scale_factor)))
         
         self.control_images = [left_mouse_img, right_mouse_img]
 
@@ -74,6 +81,11 @@ class Game:
             'background': pygame.transform.scale(load_image('background2.png'), (self.display_2.get_width(), self.display_2.get_height())),
             'door': [door],
             'key': [key],
+            'a_button': [a_button_img],
+            'd_button': [d_button_img],
+            'w_button': [w_button_img],
+            'left_mouse_img': [left_mouse_img],
+            'right_mouse_img': [right_mouse_img]
         }
 
         # Load audio files
@@ -282,6 +294,20 @@ class Game:
         self.dead = 0
         self.won = False
 
+        self.tutorial_hints = []
+        if (isinstance(map_id_or_path, int) and map_id_or_path == 1) or \
+        (isinstance(map_id_or_path, str) and map_id_or_path.endswith('level1.json')):
+            # Add control hints at specific world positions
+            self.tutorial_hints = [
+                {'image': 'a_button', 'pos': (20, 342)},  # Adjust these coordinates
+                {'image': 'd_button', 'pos': (40, 342)},
+                {'image': 'w_button', 'pos': (73, 325)},
+                {'image': 'w_button', 'pos': (234, 85)},
+                {'image': 'w_button', 'pos': (170, 125)},
+                {'image': 'left_mouse_img', 'pos': (235, 340)},    # Adjust coordinates
+                {'image': 'right_mouse_img', 'pos': (468, 20)},
+            ]
+
     def is_in_noportalzone(self, pos):
         """Check if a position is over a noportalzone tile"""
         tile_loc = str(int(pos[0] // self.tilemap.tile_size)) + ';' + str(int(pos[1] // self.tilemap.tile_size))
@@ -347,6 +373,15 @@ class Game:
 
         # If we get here, all overlapping tiles are grass or stone
         return True
+
+    def cursor_over_solid_tile(self, pos):
+        """Check if the cursor position is directly over a grass or stone tile"""
+        tile_loc = str(int(pos[0] // self.tilemap.tile_size)) + ';' + str(int(pos[1] // self.tilemap.tile_size))
+        if tile_loc in self.tilemap.tilemap:
+            tile_type = self.tilemap.tilemap[tile_loc]['type']
+            if tile_type in PHYSICS_TILES:  # PHYSICS_TILES contains 'grass' and 'stone'
+                return True
+        return False
 
     def check_portal_teleport(self, entity):
         """Check if entity should be teleported through portals"""
@@ -416,12 +451,14 @@ class Game:
                 cursor_portal_rect = self.cursor_portal.get_rect()
                 cursor_portal_in_noportalzone = self.portal_overlaps_noportalzone(cursor_portal_rect)
                 cursor_portal_encompassed_by_solid = self.portal_fully_encompassed_by_solid(cursor_portal_rect)
+                cursor_over_solid = self.cursor_over_solid_tile(self.mouse_pos)
                 portal_placement_blocked = cursor_in_noportalzone or cursor_portal_in_noportalzone or cursor_portal_encompassed_by_solid
             else:
                 # When paused, use previous values for rendering
                 cursor_portal_rect = self.cursor_portal.get_rect()
                 cursor_portal_in_noportalzone = False
                 cursor_portal_encompassed_by_solid = False
+                cursor_over_solid = False
                 portal_placement_blocked = False
 
             if not self.paused:
@@ -683,6 +720,11 @@ class Game:
             # Render tilemap
             self.tilemap.render(self.display, offset=render_scroll)
 
+            # Render tutorial hints
+            for hint in self.tutorial_hints:
+                img = self.assets[hint['image']][0]
+                self.display.blit(img, (hint['pos'][0] - render_scroll[0], hint['pos'][1] - render_scroll[1]))
+
             if not self.paused:
                 # Update crates (check for pushing before updating)
                 for crate in self.crates:
@@ -829,7 +871,7 @@ class Game:
             # Render portals - always show both portals (squares around player and cursor)
             self.player_portal.render(self.display, offset=render_scroll)
             # Only render cursor portal if it's not in a noportalzone and not fully encompassed by solid tiles
-            if not cursor_portal_in_noportalzone and not cursor_portal_encompassed_by_solid:
+            if not cursor_portal_in_noportalzone and not cursor_portal_encompassed_by_solid and not cursor_over_solid:
                 self.cursor_portal.render(self.display, offset=render_scroll)
 
             # Handle events
@@ -955,19 +997,23 @@ class Game:
 
             self.display_2.blit(self.display, (0, 0))
 
-            # Render control images in top right corner
-            control_spacing = 5  # Spacing between control images
-            control_y = 5  # Top margin
-            
-            # Calculate total width of all control images + spacing
-            total_width = sum(img.get_width() for img in self.control_images) + (control_spacing * (len(self.control_images) - 1))
-            control_start_x = self.display_2.get_width() - total_width - 5  # 5px margin from right edge
-            
-            # Draw control images from left to right
-            current_x = control_start_x
-            for img in self.control_images:
-                self.display_2.blit(img, (current_x, control_y))
-                current_x += img.get_width() + control_spacing
+            is_level_1 = (isinstance(self.level, int) and self.level == 1) or \
+                         (isinstance(self.level, str) and self.level.endswith('level1.json'))
+
+            if not is_level_1:
+                # Render control images in top right corner
+                control_spacing = 5  # Spacing between control images
+                control_y = 5  # Top margin
+                
+                # Calculate total width of all control images + spacing
+                total_width = sum(img.get_width() for img in self.control_images) + (control_spacing * (len(self.control_images) - 1))
+                control_start_x = self.display_2.get_width() - total_width - 5  # 5px margin from right edge
+                
+                # Draw control images from left to right
+                current_x = control_start_x
+                for img in self.control_images:
+                    self.display_2.blit(img, (current_x, control_y))
+                    current_x += img.get_width() + control_spacing
 
             # Render transition overlay (only for death, not win)
             if self.transition_active and self.transition_type != 'win':

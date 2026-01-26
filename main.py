@@ -240,7 +240,7 @@ def main():
     
     # Set up screen (matching homepage/game dimensions)
     screen = pygame.display.set_mode((960, 640))
-    pygame.display.set_caption('Portal Puzzle')
+    pygame.display.set_caption('The Time I Reincarnated as a Teleporting Goat in a 2D Puzzle Platformer')
     
     # Show introduction screen first (only on first run)
     run_introduction(screen)
