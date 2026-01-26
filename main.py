@@ -89,7 +89,16 @@ def run_credits(screen):
         credits_image = pygame.image.load(credits_image_path).convert()
     except:
         return
-    
+
+    # Load credits sfx
+    credits_sfx_path = os.path.join(game_dir, 'data', 'audio', 'credits_song.mp3')
+    try:
+        pygame.mixer.music.load(credits_sfx_path)
+        pygame.mixer.music.set_volume(0.3)
+        pygame.mixer.music.play(-1)
+    except:
+        pass
+        
     # Get screen dimensions
     screen_width, screen_height = screen.get_size()
     
