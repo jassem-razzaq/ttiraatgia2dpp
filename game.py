@@ -304,12 +304,12 @@ class Game:
         (isinstance(map_id_or_path, str) and map_id_or_path.endswith('level1.json')):
             # Add control hints at specific world positions
             self.tutorial_hints = [
-                {'image': 'a_button', 'pos': (20, 342)},  # Adjust these coordinates
+                {'image': 'a_button', 'pos': (20, 342)},
                 {'image': 'd_button', 'pos': (40, 342)},
-                {'image': 'w_button', 'pos': (73, 325)},
+                {'image': 'w_button', 'pos': (74, 325)},
                 {'image': 'w_button', 'pos': (234, 85)},
                 {'image': 'w_button', 'pos': (170, 125)},
-                {'image': 'left_mouse_img', 'pos': (235, 340)},    # Adjust coordinates
+                {'image': 'left_mouse_img', 'pos': (235, 340)},
                 {'image': 'right_mouse_img', 'pos': (468, 20)},
             ]
 
