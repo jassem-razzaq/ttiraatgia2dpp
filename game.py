@@ -44,6 +44,10 @@ class Game:
         cursor_img = pygame.image.load(os.path.join(game_dir, 'data', 'images', 'cursor.png'))
         cursor_img = cursor_img.convert_alpha()
 
+        # Load no cursor image
+        no_cursor_img = pygame.image.load(os.path.join(game_dir, 'data', 'images', 'no_cursor.png'))
+        no_cursor_img = no_cursor_img.convert_alpha()
+
         # Load control images
         left_mouse_img = pygame.image.load(os.path.join(game_dir, 'data', 'images', 'controls', 'left_mouse.png')).convert_alpha()
         right_mouse_img = pygame.image.load(os.path.join(game_dir, 'data', 'images', 'controls', 'right_mouse.png')).convert_alpha()
@@ -159,6 +163,7 @@ class Game:
 
         # Store cursor image and hide default cursor
         self.cursor_img = cursor_img
+        self.no_cursor_img = no_cursor_img
         pygame.mouse.set_visible(False)
 
         # Portal system
@@ -456,9 +461,10 @@ class Game:
             else:
                 # When paused, use previous values for rendering
                 cursor_portal_rect = self.cursor_portal.get_rect()
+                cursor_in_noportalzone = self.is_in_noportalzone(self.mouse_pos)
                 cursor_portal_in_noportalzone = False
                 cursor_portal_encompassed_by_solid = False
-                cursor_over_solid = False
+                cursor_over_solid = self.cursor_over_solid_tile(self.mouse_pos)
                 portal_placement_blocked = False
 
             if not self.paused:
@@ -1175,10 +1181,15 @@ class Game:
                     self.screen.blit(fade_overlay, (0, 0))
             
             # Render custom cursor at mouse position (centered)
+            # Use no_cursor image if portal placement is blocked
             mouse_x, mouse_y = pygame.mouse.get_pos()
-            cursor_x = mouse_x - self.cursor_img.get_width() // 2
-            cursor_y = mouse_y - self.cursor_img.get_height() // 2
-            self.screen.blit(self.cursor_img, (cursor_x, cursor_y))
+            if cursor_over_solid or cursor_in_noportalzone or cursor_portal_in_noportalzone:
+                current_cursor = self.no_cursor_img
+            else:
+                current_cursor = self.cursor_img
+            cursor_x = mouse_x - current_cursor.get_width() // 2
+            cursor_y = mouse_y - current_cursor.get_height() // 2
+            self.screen.blit(current_cursor, (cursor_x, cursor_y))
             
             pygame.display.update()
 
