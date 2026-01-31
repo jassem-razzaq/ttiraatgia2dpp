@@ -760,7 +760,7 @@ def run_homepage():
             if event.type == pygame.MOUSEMOTION:
                 homepage.update_hover(event.pos)
 
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
                 choice = homepage.handle_click(event.pos)
 
                 if choice == "GENERATE_LEVEL_START":
