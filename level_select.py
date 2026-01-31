@@ -9,7 +9,7 @@ import os
 import json
 import pygame
 import glob
-from scripts.utils import load_image, load_images
+from scripts.utils import load_image, load_images, Animation
 from homepage import generate_level_with_gemini
 
 
@@ -190,7 +190,6 @@ class LevelSelect:
         self.base_grid_top = self.toggle_y + self.toggle_height + self.toggle_bottom_margin
         self.cell_h = 55
         self.square_size = 44
-        self.square_radius = 8
         self.level_font = pygame.font.Font(font_path, 9)
         self.generate_height = 24
         self.generate_grid_gap = 8
@@ -218,11 +217,26 @@ class LevelSelect:
 
         # State
         self.selected_level_path = None
+        self.selection_time = 0.0  # When level was selected (for animations)
         self.hovered = None
         self.clicked = None
         self.click_anim_time = 0.0
         self.elapsed_time = 0.0
         self.is_loading = False
+
+        # Portal sizzle effect (red/white alternating)
+        portal_red_imgs = load_images('portal_red')
+        portal_white_imgs = load_images('portal_white')
+        self.portal_red_anim = Animation(portal_red_imgs, img_dur=5)
+        self.portal_white_anim = Animation(portal_white_imgs, img_dur=5)
+        self.portal_sizzle_size = self.square_size + 4  # Slightly larger to "cover" the square
+
+        # Game goat sprite for selection animation (player idle)
+        goat_idle_imgs = load_images('entities/player/idle')
+        self.goat_anim = Animation(goat_idle_imgs, img_dur=6)
+        goat_scale = 1.4  # 200% bigger (was 0.7)
+        self.goat_w = int(goat_idle_imgs[0].get_width() * goat_scale)
+        self.goat_h = int(goat_idle_imgs[0].get_height() * goat_scale)
 
     def _get_current_levels(self):
         levels = self.standard_levels if self.map_type == "developer" else self.gemini_levels
@@ -261,6 +275,10 @@ class LevelSelect:
         self.elapsed_time += dt
         if self.click_anim_time > 0:
             self.click_anim_time = max(0, self.click_anim_time - dt)
+        if self.selected_level_path:
+            self.portal_red_anim.update()
+            self.portal_white_anim.update()
+            self.goat_anim.update()
 
     def _render_outlined(self, text, font, fg=(255, 255, 255), outline=(0, 50, 120), thickness=1):
         base = font.render(text, False, fg)
@@ -294,23 +312,63 @@ class LevelSelect:
 
     def _draw_level_grid(self):
         levels = self._get_levels()
+        selected_rect = None
+        selected_index = None
         for i, (num, path) in enumerate(levels):
             rect = self._get_level_rect(i)
 
             # Square with rounded corners: gray when not selected, yellow when selected (like developer toggle)
             is_hovered = self.hovered == ("level", path)
             is_selected = self.selected_level_path == path
-            color = (255, 220, 100) if is_selected else (220, 220, 220)  # Yellow when selected, light gray otherwise
+            if is_selected:
+                selected_rect = rect
+                selected_index = i
+            color = (135, 206, 235) if is_selected else (220, 220, 220)  # Sky blue when selected, light gray otherwise
             if is_hovered and not is_selected:
-                color = (240, 240, 240)
-            pygame.draw.rect(self.display, color, rect, border_radius=self.square_radius)
-            pygame.draw.rect(self.display, (0, 50, 120), rect, 2, border_radius=self.square_radius)
+                color = (100, 150, 220)  # Blue on hover
+            pygame.draw.rect(self.display, color, rect)
+            outline_color = (0, 100, 200) if is_selected else (0, 50, 120)  # Blue when selected
+            pygame.draw.rect(self.display, outline_color, rect, 2)
 
             # Level number (2 digits)
             num_str = f"{num:02d}"
-            txt_color = (0, 50, 120) if is_selected else (130, 130, 130)
+            txt_color = (0, 80, 160) if is_selected else (130, 130, 130)  # Blue text when selected
             txt = self.level_font.render(num_str, False, txt_color)
             self.display.blit(txt, (rect.centerx - txt.get_width() // 2, rect.centery - txt.get_height() // 2))
+
+        # Draw portal sizzle and goat on selected level square
+        if selected_rect and self.selected_level_path:
+            self._draw_selection_effects(selected_rect)
+
+    def _draw_selection_effects(self, rect):
+        """Draw goat (behind) and teleporting portal outline (sizzling) on selected level square."""
+        # Goat first (behind the sizzling outline)
+        sel_elapsed = self.elapsed_time - self.selection_time
+        jump_duration = 0.4
+        if sel_elapsed < jump_duration:
+            # Jump arc: emerge from portal (center of square), pop up, land on square
+            t = sel_elapsed / jump_duration
+            arc = 4 * t * (1 - t)  # Parabolic: 0 at start/end, 1 at peak (t=0.5)
+            # Start: goat half-emerged at bottom of square; peak: 20px above; end: standing
+            start_y = rect.bottom - self.goat_h // 2
+            peak_offset = -20
+            end_y = rect.bottom - self.goat_h
+            goat_y = start_y + (end_y - start_y) * t + arc * peak_offset
+        else:
+            goat_y = rect.bottom - self.goat_h  # Standing on square
+        goat_x = rect.centerx - self.goat_w // 2
+        goat_img = self.goat_anim.img()
+        goat_surf = pygame.transform.scale(goat_img, (self.goat_w, self.goat_h))
+        self.display.blit(goat_surf, (int(goat_x), int(goat_y)))
+
+        # Portal sizzle on top (alternate red/white, scaled to cover the square)
+        sizzle = int(self.elapsed_time * 5) % 2
+        portal_anim = self.portal_red_anim if sizzle == 0 else self.portal_white_anim
+        portal_img = portal_anim.img()
+        scaled = pygame.transform.scale(portal_img, (self.portal_sizzle_size, self.portal_sizzle_size))
+        px = rect.centerx - self.portal_sizzle_size // 2
+        py = rect.centery - self.portal_sizzle_size // 2
+        self.display.blit(scaled, (px, py))
 
     def _draw_preview_panel(self):
         # Preview with blue outline and rounded corners - image clipped to match
@@ -365,7 +423,7 @@ class LevelSelect:
         for i, (aid, label) in enumerate(items):
             is_hovered = self.hovered == ("action", aid)
             text = f">{label}<" if is_hovered else label
-            color = (255, 210, 0) if is_hovered else (0, 80, 180)  # Yellow on hover, blue otherwise
+            color = (0, 100, 200) if is_hovered else (95, 95, 95)  # Blue on hover, darker gray otherwise
             s, _ = self._render_text_with_spacing(text, self.action_font, color, 2)
             y = action_y + i * self.action_line_gap
             r = s.get_rect(center=(center_x, y))
@@ -461,6 +519,7 @@ class LevelSelect:
         for i, (_, path) in enumerate(levels):
             if self._get_level_rect(i).collidepoint(pos):
                 self.selected_level_path = path
+                self.selection_time = self.elapsed_time
                 return None
 
         return None

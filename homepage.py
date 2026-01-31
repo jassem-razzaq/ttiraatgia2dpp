@@ -519,7 +519,7 @@ class Homepage:
                     text_color = (255, 255, 255)  # White when not hovered
 
                 text_surf, _ = self._render_text_with_letter_spacing(
-                    display_text, self.button_font, text_color, letter_spacing=3
+                    display_text, self.button_font, text_color, letter_spacing=0
                 )
                 text_rect = text_surf.get_rect(center=(center_x + sx, menu_y + i * menu_line_gap + sy))
                 # Bold: draw twice with 1px offset for thicker appearance
@@ -551,7 +551,7 @@ class Homepage:
                     text_color = (255, 255, 255)
 
                 text_surf, _ = self._render_text_with_letter_spacing(
-                    display_text, self.button_font, text_color, letter_spacing=3
+                    display_text, self.button_font, text_color, letter_spacing=0
                 )
                 text_rect = text_surf.get_rect(center=(center_x + sx, menu_y + i * menu_line_gap + sy))
                 # Bold: draw twice with 1px offset for thicker appearance
