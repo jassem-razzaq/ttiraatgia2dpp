@@ -138,6 +138,7 @@ class Homepage:
 
         # Confetti particles for the splash (optional but "super extra")
         self.particles = []
+        self.title_wave_start_time = None  # Set when entering goat_entrance, for smooth ramp-in
 
         # Goat animation
         self.goat_entrance_speed = 150.0
@@ -208,10 +209,6 @@ class Homepage:
         # Track if moo sound has been played (to play only once)
         self.moo_played = False
 
-        # Title wave transition: ramp amplitude from 0 over this duration (seconds)
-        self.title_wave_start_time = None
-        self.title_wave_transition_duration = 0.6
-
     # -----------------------------
     # Helpers
     # -----------------------------
@@ -233,38 +230,32 @@ class Homepage:
         surf.blit(base, (thickness, thickness))
         return surf
 
-    def _draw_menu_text(self, text, font, color, center_x, y, letter_spacing=1):
-        """Draw menu text with slight letter spacing, centered. Returns the bounding rect."""
-        char_widths = [font.size(c)[0] for c in text]
-        total_width = sum(char_widths) + letter_spacing * (len(text) - 1) if len(text) > 1 else sum(char_widths)
-        x = center_x - total_width // 2
-        for i, c in enumerate(text):
-            surf = font.render(c, False, color)
-            self.display.blit(surf, (x, y))
-            self.display.blit(surf, (x + 1, y))  # Bold
-            x += char_widths[i] + (letter_spacing if i < len(text) - 1 else 0)
-        return pygame.Rect(center_x - total_width // 2, y, total_width, font.get_height())
+    def _render_text_with_letter_spacing(self, text, font, color, letter_spacing=2):
+        """Render text with extra spacing between each character. Returns (surface, width)."""
+        if not text:
+            return font.render("", False, color), 0
+        char_surfs = [font.render(c, False, color) for c in text]
+        total_width = sum(s.get_width() for s in char_surfs) + (len(text) - 1) * letter_spacing
+        height = max(s.get_height() for s in char_surfs)
+        surf = pygame.Surface((total_width, height), pygame.SRCALPHA)
+        x = 0
+        for i, (c, s) in enumerate(zip(text, char_surfs)):
+            surf.blit(s, (x, 0))
+            x += s.get_width() + (letter_spacing if i < len(text) - 1 else 0)
+        return surf, total_width
 
     def _draw_wave_text(self, text, font, fg, outline, thickness, center_x, base_y,
                         amplitude=4, freq=2.5, phase_per_char=0.35):
         """Draw text letter-by-letter with sine wave motion on each character."""
-        # Smooth transition: ramp amplitude from 0 after shake, over transition duration
-        amp_factor = 0.0
-        if self.title_wave_start_time is not None:
-            t = self.elapsed_time - self.title_wave_start_time
-            amp_factor = min(1.0, max(0.0, t / self.title_wave_transition_duration))
-            # Ease-in for smoother feel (ease out cubic)
-            amp_factor = 1.0 - (1.0 - amp_factor) ** 2
-        eff_amplitude = amplitude * amp_factor
-
         # Use font's native character advances for spacing (matches full-text render)
         char_advances = [font.size(c)[0] for c in text]
         total_width = sum(char_advances)
         x = center_x - total_width // 2
         for i, c in enumerate(text):
             surf = self._render_outlined(c, font, fg=fg, outline=outline, thickness=thickness)
+            # Draw centered in this character's advance (outline may overlap adjacent cells)
             draw_x = x + (char_advances[i] - surf.get_width()) // 2
-            y_offset = int(math.sin(self.elapsed_time * freq + i * phase_per_char) * eff_amplitude)
+            y_offset = int(math.sin(self.elapsed_time * freq + i * phase_per_char) * amplitude)
             self.display.blit(surf, (draw_x, base_y + y_offset))
             x += char_advances[i]
 
@@ -404,7 +395,10 @@ class Homepage:
             if self.elapsed_time >= self.wiggle_trigger_time:
                 self.shake = 8.0  # More pronounced wiggle intensity
                 self.wiggle_trigger_time = 0.0  # Reset to prevent retriggering
-                self.title_wave_start_time = self.elapsed_time  # Start wave after shake effect
+
+        # Start sine wave ramp only after wiggle shake has decayed (title stays static until then)
+        if self.phase == "idle" and self.shake <= 0 and self.title_wave_start_time is None:
+            self.title_wave_start_time = self.elapsed_time
 
     def render(self):
         """Render all visuals to the pixel canvas"""
@@ -420,43 +414,46 @@ class Homepage:
         # -----------------------------
         title_settled = self.phase in ("goat_entrance", "goat_surprised", "speech_bubble", "idle")
         center_x = self.display.get_width() // 2 + sx
+        shake_done = self.shake <= 0
 
-        if title_settled and self.title_wave_start_time is not None:
-            # Per-letter sine wave motion - only after shake/earthquake
+        if title_settled and shake_done and self.title_wave_start_time is not None:
+            # Per-letter sine wave (starts only after shake has decayed)
+            ramp_duration = 0.6
+            t = min(1.0, (self.elapsed_time - self.title_wave_start_time) / ramp_duration)
+            wave_amp = 4 * (1 - (1 - t) ** 2)  # Ease-out quad for smooth settle
             self._draw_wave_text(
                 self.title_line1, self.title_font_small,
                 fg=(255, 255, 255), outline=(0, 50, 120), thickness=3,
-                center_x=center_x, base_y=self.rect_line1.y + sy
+                center_x=center_x, base_y=self.rect_line1.y + sy, amplitude=wave_amp
             )
             self._draw_wave_text(
                 self.title_mid, self.title_font_big,
                 fg=(255, 200, 50), outline=(0, 50, 120), thickness=4,
-                center_x=center_x, base_y=self.rect_mid.y + sy
+                center_x=center_x, base_y=self.rect_mid.y + sy, amplitude=wave_amp
             )
             self._draw_wave_text(
                 self.title_line3, self.title_font_small,
                 fg=(255, 255, 255), outline=(0, 50, 120), thickness=3,
-                center_x=center_x, base_y=self.rect_line3.y + sy
+                center_x=center_x, base_y=self.rect_line3.y + sy, amplitude=wave_amp
             )
-        elif title_settled:
-            # Static title (no change) until earthquake
-            self.display.blit(self.surf_line1, (self.rect_line1.x + sx, self.rect_line1.y + sy))
-            self.display.blit(self.surf_mid, (self.rect_mid.x + sx, self.rect_mid.y + sy))
-            self.display.blit(self.surf_line3, (self.rect_line3.x + sx, self.rect_line3.y + sy))
         else:
             # LINE 1 crop reveal (typewriter)
             if self.reveal1 > 0:
                 crop1 = pygame.Rect(0, 0, self.reveal1, self.surf_line1.get_height())
                 self.display.blit(self.surf_line1, (self.rect_line1.x + sx, self.rect_line1.y + sy), area=crop1)
 
-            # MID - keep at constant size (no pop) until shake/wave; only rotation during splash
+            # MID splash (pop animation)
             if self.phase in ("title_splash", "title_hold_after_splash", "title_line3", "goat_entrance", "goat_surprised", "speech_bubble", "idle"):
                 u = 1.0
                 if self.phase == "title_splash":
                     u = min(1.0, self.phase_timer / self.splash_time)
+
+                pop = 0.70 + 0.55 * math.sin(min(1.0, u) * math.pi)
+                settle = 1.0 + 0.12 * math.sin(min(1.0, u) * math.pi) * (1.0 - u)
+                scale = (pop * 0.35 + settle * 0.65)
                 rot = (math.sin(u * math.pi * 2.2) * 6.0) * (1.0 - u)
-                # Scale 1.0 - no size change until wave after shake
-                mid_surf = pygame.transform.rotozoom(self.surf_mid, rot, 1.0)
+
+                mid_surf = pygame.transform.rotozoom(self.surf_mid, rot, scale)
                 r = mid_surf.get_rect(center=(self.rect_mid.centerx + sx, self.rect_mid.centery + sy))
                 self.display.blit(mid_surf, r)
 
@@ -521,11 +518,15 @@ class Homepage:
                     display_text = label
                     text_color = (255, 255, 255)  # White when not hovered
 
-                text_rect = self._draw_menu_text(
-                    display_text, self.button_font, text_color,
-                    center_x + sx, menu_y + i * menu_line_gap + sy,
-                    letter_spacing=1
+                text_surf, _ = self._render_text_with_letter_spacing(
+                    display_text, self.button_font, text_color, letter_spacing=3
                 )
+                text_rect = text_surf.get_rect(center=(center_x + sx, menu_y + i * menu_line_gap + sy))
+                # Bold: draw twice with 1px offset for thicker appearance
+                self.display.blit(text_surf, text_rect)
+                self.display.blit(text_surf, (text_rect.x + 1, text_rect.y))
+
+                # Store rect for hover/click (add padding for easier interaction)
                 pad = 8
                 hover_rect = pygame.Rect(
                     text_rect.x - pad, text_rect.y - pad,
@@ -549,11 +550,14 @@ class Homepage:
                     display_text = label
                     text_color = (255, 255, 255)
 
-                text_rect = self._draw_menu_text(
-                    display_text, self.button_font, text_color,
-                    center_x + sx, menu_y + i * menu_line_gap + sy,
-                    letter_spacing=1
+                text_surf, _ = self._render_text_with_letter_spacing(
+                    display_text, self.button_font, text_color, letter_spacing=3
                 )
+                text_rect = text_surf.get_rect(center=(center_x + sx, menu_y + i * menu_line_gap + sy))
+                # Bold: draw twice with 1px offset for thicker appearance
+                self.display.blit(text_surf, text_rect)
+                self.display.blit(text_surf, (text_rect.x + 1, text_rect.y))
+
                 pad = 8
                 hover_rect = pygame.Rect(
                     text_rect.x - pad, text_rect.y - pad,
