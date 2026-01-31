@@ -89,7 +89,7 @@ class Homepage:
         # Fonts - Using Press Start 2P for title and buttons
         font_path_press_start = os.path.join(game_dir, 'data', 'fonts', 'PressStart2P-vaV7.ttf')
         self.font = pygame.font.Font(font_path_press_start, 8)          # buttons / small text
-        self.button_font = pygame.font.Font(font_path_press_start, 8)   # button text
+        self.button_font = pygame.font.Font(font_path_press_start, 9)   # button text
         self.title_font_small = pygame.font.Font(font_path_press_start, 14)  # line 1 / line 3
         self.title_font_big = pygame.font.Font(font_path_press_start, 20)    # "TELEPORTING GOAT"
 
@@ -162,40 +162,23 @@ class Homepage:
         self.is_loading = False
         self.loading_text = "Generating level..."
 
-        # Button definitions
-        # Position buttons under the title block, centered like title
-        title_block_height = (self.line_gap * 3) + 6
-        button_y = self.title_y + title_block_height + 3  # Spacing from title
+        # Menu items: (id, label) - vertically stacked, center-aligned, old-school hover style
+        self.menu_items = [
+            ("start", "Start Game"),
+            ("credits", "Credits"),
+            ("exit", "Exit Game"),
+        ]
+        self.menu_item_rects = {}  # Populated in render based on font metrics
 
-        button_width = 130
-        button_padding = 4  # Vertical padding
-        button_height = 20 + (button_padding * 2)  # Base height + padding
-        button_gap = 15  # Gap between buttons
-        
-        # Button interaction state
+        # Button interaction state (used for menu text hover/click)
         self.mouse_pos = (0, 0)
-        self.hovered_button = None  # "start", "exit", "select_level", "generate_level", or None
-        self.clicked_button = None  # Same as above, cleared after click
-        self.click_anim_time = 0.0  # Time since click for visual feedback
-        
-        # Calculate total width of both buttons + gap
-        total_button_width = (button_width * 2) + button_gap
-        # Center the button group
-        button_group_x = (self.display.get_width() - total_button_width) // 2
-        
-        # Start button (yellow background, blue outline, yellow text)
-        self.start_button_rect = pygame.Rect(button_group_x, button_y, button_width, button_height)
+        self.hovered_button = None  # "start", "exit", "credits", "select_level", "generate_level", or None
+        self.clicked_button = None
+        self.click_anim_time = 0.0
 
-        # Credits button (yellow background, blue outline, yellow text)
-        self.credits_button_rect = pygame.Rect(button_group_x + 70, button_y + button_height + 5, button_width, button_height)
-        
-        # Exit button (red background, blue outline, white text)
-        exit_button_x = button_group_x + button_width + button_gap
-        self.exit_button_rect = pygame.Rect(exit_button_x, button_y, button_width, button_height)
-        
-        # Menu buttons (keep for Select Level, Generate Level)
-        self.select_level_button_rect = pygame.Rect(button_group_x, button_y, button_width, button_height)
-        self.generate_level_button_rect = pygame.Rect(button_group_x, button_y + button_height + 5, button_width, button_height)
+        # Legacy rects for show_menu_buttons (Select Level, Generate Level) - computed when needed
+        self.select_level_button_rect = None
+        self.generate_level_button_rect = None
 
         # Timing constants (kept)
         self.GOAT_ENTRANCE_DELAY = 0.7
@@ -225,6 +208,10 @@ class Homepage:
         # Track if moo sound has been played (to play only once)
         self.moo_played = False
 
+        # Title wave transition: ramp amplitude from 0 over this duration (seconds)
+        self.title_wave_start_time = None
+        self.title_wave_transition_duration = 0.6
+
     # -----------------------------
     # Helpers
     # -----------------------------
@@ -245,6 +232,41 @@ class Homepage:
 
         surf.blit(base, (thickness, thickness))
         return surf
+
+    def _draw_menu_text(self, text, font, color, center_x, y, letter_spacing=1):
+        """Draw menu text with slight letter spacing, centered. Returns the bounding rect."""
+        char_widths = [font.size(c)[0] for c in text]
+        total_width = sum(char_widths) + letter_spacing * (len(text) - 1) if len(text) > 1 else sum(char_widths)
+        x = center_x - total_width // 2
+        for i, c in enumerate(text):
+            surf = font.render(c, False, color)
+            self.display.blit(surf, (x, y))
+            self.display.blit(surf, (x + 1, y))  # Bold
+            x += char_widths[i] + (letter_spacing if i < len(text) - 1 else 0)
+        return pygame.Rect(center_x - total_width // 2, y, total_width, font.get_height())
+
+    def _draw_wave_text(self, text, font, fg, outline, thickness, center_x, base_y,
+                        amplitude=4, freq=2.5, phase_per_char=0.35):
+        """Draw text letter-by-letter with sine wave motion on each character."""
+        # Smooth transition: ramp amplitude from 0 after shake, over transition duration
+        amp_factor = 0.0
+        if self.title_wave_start_time is not None:
+            t = self.elapsed_time - self.title_wave_start_time
+            amp_factor = min(1.0, max(0.0, t / self.title_wave_transition_duration))
+            # Ease-in for smoother feel (ease out cubic)
+            amp_factor = 1.0 - (1.0 - amp_factor) ** 2
+        eff_amplitude = amplitude * amp_factor
+
+        # Use font's native character advances for spacing (matches full-text render)
+        char_advances = [font.size(c)[0] for c in text]
+        total_width = sum(char_advances)
+        x = center_x - total_width // 2
+        for i, c in enumerate(text):
+            surf = self._render_outlined(c, font, fg=fg, outline=outline, thickness=thickness)
+            draw_x = x + (char_advances[i] - surf.get_width()) // 2
+            y_offset = int(math.sin(self.elapsed_time * freq + i * phase_per_char) * eff_amplitude)
+            self.display.blit(surf, (draw_x, base_y + y_offset))
+            x += char_advances[i]
 
     def _spawn_confetti(self, center, n=26):
         cx, cy = center
@@ -382,6 +404,7 @@ class Homepage:
             if self.elapsed_time >= self.wiggle_trigger_time:
                 self.shake = 8.0  # More pronounced wiggle intensity
                 self.wiggle_trigger_time = 0.0  # Reset to prevent retriggering
+                self.title_wave_start_time = self.elapsed_time  # Start wave after shake effect
 
     def render(self):
         """Render all visuals to the pixel canvas"""
@@ -395,32 +418,52 @@ class Homepage:
         # -----------------------------
         # Draw title
         # -----------------------------
-        # LINE 1 crop reveal
-        if self.reveal1 > 0:
-            crop1 = pygame.Rect(0, 0, self.reveal1, self.surf_line1.get_height())
-            self.display.blit(self.surf_line1, (self.rect_line1.x + sx, self.rect_line1.y + sy), area=crop1)
+        title_settled = self.phase in ("goat_entrance", "goat_surprised", "speech_bubble", "idle")
+        center_x = self.display.get_width() // 2 + sx
 
-        # MID splash
-        if self.phase in ("title_splash", "title_hold_after_splash", "title_line3", "goat_entrance", "goat_surprised", "speech_bubble", "idle"):
-            u = 1.0
-            if self.phase == "title_splash":
-                u = min(1.0, self.phase_timer / self.splash_time)
+        if title_settled and self.title_wave_start_time is not None:
+            # Per-letter sine wave motion - only after shake/earthquake
+            self._draw_wave_text(
+                self.title_line1, self.title_font_small,
+                fg=(255, 255, 255), outline=(0, 50, 120), thickness=3,
+                center_x=center_x, base_y=self.rect_line1.y + sy
+            )
+            self._draw_wave_text(
+                self.title_mid, self.title_font_big,
+                fg=(255, 200, 50), outline=(0, 50, 120), thickness=4,
+                center_x=center_x, base_y=self.rect_mid.y + sy
+            )
+            self._draw_wave_text(
+                self.title_line3, self.title_font_small,
+                fg=(255, 255, 255), outline=(0, 50, 120), thickness=3,
+                center_x=center_x, base_y=self.rect_line3.y + sy
+            )
+        elif title_settled:
+            # Static title (no change) until earthquake
+            self.display.blit(self.surf_line1, (self.rect_line1.x + sx, self.rect_line1.y + sy))
+            self.display.blit(self.surf_mid, (self.rect_mid.x + sx, self.rect_mid.y + sy))
+            self.display.blit(self.surf_line3, (self.rect_line3.x + sx, self.rect_line3.y + sy))
+        else:
+            # LINE 1 crop reveal (typewriter)
+            if self.reveal1 > 0:
+                crop1 = pygame.Rect(0, 0, self.reveal1, self.surf_line1.get_height())
+                self.display.blit(self.surf_line1, (self.rect_line1.x + sx, self.rect_line1.y + sy), area=crop1)
 
-            # nice pop + settle
-            pop = 0.70 + 0.55 * math.sin(min(1.0, u) * math.pi)  # up to ~1.25
-            settle = 1.0 + 0.12 * math.sin(min(1.0, u) * math.pi) * (1.0 - u)
-            scale = (pop * 0.35 + settle * 0.65)
+            # MID - keep at constant size (no pop) until shake/wave; only rotation during splash
+            if self.phase in ("title_splash", "title_hold_after_splash", "title_line3", "goat_entrance", "goat_surprised", "speech_bubble", "idle"):
+                u = 1.0
+                if self.phase == "title_splash":
+                    u = min(1.0, self.phase_timer / self.splash_time)
+                rot = (math.sin(u * math.pi * 2.2) * 6.0) * (1.0 - u)
+                # Scale 1.0 - no size change until wave after shake
+                mid_surf = pygame.transform.rotozoom(self.surf_mid, rot, 1.0)
+                r = mid_surf.get_rect(center=(self.rect_mid.centerx + sx, self.rect_mid.centery + sy))
+                self.display.blit(mid_surf, r)
 
-            rot = (math.sin(u * math.pi * 2.2) * 6.0) * (1.0 - u)
-
-            mid_surf = pygame.transform.rotozoom(self.surf_mid, rot, scale)
-            r = mid_surf.get_rect(center=(self.rect_mid.centerx + sx, self.rect_mid.centery + sy))
-            self.display.blit(mid_surf, r)
-
-        # LINE 3 crop reveal
-        if self.phase in ("title_line3", "goat_entrance", "goat_surprised", "speech_bubble", "idle") and self.reveal3 > 0:
-            crop3 = pygame.Rect(0, 0, self.reveal3, self.surf_line3.get_height())
-            self.display.blit(self.surf_line3, (self.rect_line3.x + sx, self.rect_line3.y + sy), area=crop3)
+            # LINE 3 crop reveal (typewriter)
+            if self.phase in ("title_line3", "goat_entrance", "goat_surprised", "speech_bubble", "idle") and self.reveal3 > 0:
+                crop3 = pygame.Rect(0, 0, self.reveal3, self.surf_line3.get_height())
+                self.display.blit(self.surf_line3, (self.rect_line3.x + sx, self.rect_line3.y + sy), area=crop3)
 
         # Confetti particles
         self._draw_particles()
@@ -447,81 +490,80 @@ class Homepage:
             self.display.blit(self.speech_bubble, (bubble_x, bubble_y))
 
         # -----------------------------
-        # Buttons
+        # Menu text (old-school style: "> Start Game <" on hover, red highlight)
         # -----------------------------
-        def draw_button(rect, button_id, text, bg_color, text_color, outline_color=(0, 50, 120)):
-            # Check if hovering
-            is_hovered = (self.hovered_button == button_id)
-            is_clicked = (self.clicked_button == button_id and self.click_anim_time > 0)
-            
-            # Change background color on hover (similar to level buttons)
-            if is_hovered:
-                # Brighten the color based on button type
-                if button_id == "exit":
-                    # Exit button: brighter red
-                    bg_color = (230, 40, 40)  # Brighter red when hovered
-                elif button_id == "start" or bg_color == (255, 200, 50):  # Start button or yellow buttons
-                    # Yellow buttons: brighter yellow
-                    bg_color = (255, 220, 70)  # Brighter yellow when hovered
-            
-            # Calculate scale (1.05 on hover, 0.95 on click for feedback)
-            scale = 1.0
-            if is_clicked:
-                scale = 0.95  # Slight scale down on click
-            elif is_hovered:  # Start button doesn't scale
-                scale = 1.05  # Scale up 5% on hover
-            
-            # Apply scale to rect
-            scaled_width = int(rect.width * scale)
-            scaled_height = int(rect.height * scale)
-            # Apply shake offset to buttons (same as title - use sx, sy from outer scope)
-            scaled_x = rect.centerx - scaled_width // 2 + sx
-            scaled_y = rect.centery - scaled_height // 2 + sy
-            scaled_rect = pygame.Rect(scaled_x, scaled_y, scaled_width, scaled_height)
-            
-            border_radius = 5  # Rounded corners
-            # Draw button background with rounded corners
-            pygame.draw.rect(self.display, bg_color, scaled_rect, border_radius=border_radius)
-            # Draw blue outline with rounded corners
-            pygame.draw.rect(self.display, outline_color, scaled_rect, 2, border_radius=border_radius)
-            
-            # Render text with smaller button font (size 6)
-            button_text_surf = self.button_font.render(text, False, text_color)
-            
-            # Calculate centered text position
-            text_x = scaled_rect.centerx - button_text_surf.get_width() // 2
-            text_y = scaled_rect.centery - button_text_surf.get_height() // 2
-            
-            # Draw text
-            self.display.blit(button_text_surf, (text_x, text_y))
-
-        # Only show buttons after title animation completes
-        # Title is complete when we're past the title phases
         title_complete = self.phase not in ("title_line1", "title_hold_before_splash", "title_splash", "title_hold_after_splash", "title_line3")
-        
-        if title_complete:
-            # Exit button: red background, white text, blue outline
-            draw_button(self.exit_button_rect, "exit", "Exit", (200, 20, 20), (255, 255, 255))
 
-            if self.show_start_button:
-                # Start button: yellow background, blue text, blue outline
-                draw_button(self.start_button_rect, "start", "Start Game", (255, 200, 50), (0, 50, 120))
+        self.menu_item_rects = {}  # Reset each frame, repopulated below
 
-            if self.show_credits_button:
-                # Credits button: yellow background, blue text, blue outline
-                draw_button(self.credits_button_rect, "credits", "Credits", (255, 200, 50), (0, 50, 120))
+        if title_complete and not self.show_menu_buttons:
+            # Build visible menu items (filter by show_start_button, show_credits_button)
+            visible_items = []
+            for item_id, label in self.menu_items:
+                if item_id == "exit":
+                    visible_items.append((item_id, label))
+                elif item_id == "start" and self.show_start_button:
+                    visible_items.append((item_id, label))
+                elif item_id == "credits" and self.show_credits_button:
+                    visible_items.append((item_id, label))
 
-        if self.show_menu_buttons:
-            draw_button(self.select_level_button_rect, "select_level", "Select Level", (255, 200, 50), (0, 50, 120))
+            menu_y = self.title_y + (self.line_gap * 3) + 10
+            menu_line_gap = 22
+            center_x = self.display.get_width() // 2
 
-            generate_rect = pygame.Rect(
-                self.select_level_button_rect.x,
-                self.select_level_button_rect.y + self.select_level_button_rect.height + 5,
-                self.select_level_button_rect.width,
-                self.select_level_button_rect.height
-            )
-            draw_button(generate_rect, "generate_level", "Generate Level", (255, 200, 50), (0, 50, 120))
-            self.generate_level_button_rect = generate_rect
+            for i, (item_id, label) in enumerate(visible_items):
+                is_hovered = (self.hovered_button == item_id)
+                # Old-school style: "> Label <" on hover, red text
+                if is_hovered:
+                    display_text = f"> {label} <"
+                    text_color = (255, 210, 0)  # Yellow highlight
+                else:
+                    display_text = label
+                    text_color = (255, 255, 255)  # White when not hovered
+
+                text_rect = self._draw_menu_text(
+                    display_text, self.button_font, text_color,
+                    center_x + sx, menu_y + i * menu_line_gap + sy,
+                    letter_spacing=1
+                )
+                pad = 8
+                hover_rect = pygame.Rect(
+                    text_rect.x - pad, text_rect.y - pad,
+                    text_rect.width + pad * 2, text_rect.height + pad * 2
+                )
+                self.menu_item_rects[item_id] = hover_rect
+
+        if title_complete and self.show_menu_buttons:
+            # Legacy: Select Level / Generate Level as text (same style)
+            visible_items = [("select_level", "Select Level"), ("generate_level", "Generate Level")]
+            menu_y = self.title_y + (self.line_gap * 3) + 10
+            menu_line_gap = 22
+            center_x = self.display.get_width() // 2
+
+            for i, (item_id, label) in enumerate(visible_items):
+                is_hovered = (self.hovered_button == item_id)
+                if is_hovered:
+                    display_text = f"> {label} <"
+                    text_color = (255, 50, 50)
+                else:
+                    display_text = label
+                    text_color = (255, 255, 255)
+
+                text_rect = self._draw_menu_text(
+                    display_text, self.button_font, text_color,
+                    center_x + sx, menu_y + i * menu_line_gap + sy,
+                    letter_spacing=1
+                )
+                pad = 8
+                hover_rect = pygame.Rect(
+                    text_rect.x - pad, text_rect.y - pad,
+                    text_rect.width + pad * 2, text_rect.height + pad * 2
+                )
+                self.menu_item_rects[item_id] = hover_rect
+                if item_id == "select_level":
+                    self.select_level_button_rect = hover_rect
+                else:
+                    self.generate_level_button_rect = hover_rect
 
         # Loading overlay
         if self.is_loading:
@@ -536,47 +578,28 @@ class Homepage:
             self.display.blit(loading_surface, (loading_x, loading_y))
 
     def update_hover(self, mouse_pos):
-        """Update which button is being hovered"""
-        # Only detect hover if title animation is complete
+        """Update which menu item is being hovered"""
         title_complete = self.phase not in ("title_line1", "title_hold_before_splash", "title_splash", "title_hold_after_splash", "title_line3")
         if not title_complete:
             self.hovered_button = None
             return
-        
+
         self.mouse_pos = mouse_pos
         display_x = int((mouse_pos[0] / self.screen.get_width()) * self.display.get_width())
         display_y = int((mouse_pos[1] / self.screen.get_height()) * self.display.get_height())
         display_pos = (display_x, display_y)
 
         self.hovered_button = None
-
-        # Check exit button
-        if self.exit_button_rect.collidepoint(display_pos):
-            self.hovered_button = "exit"
-            return
-
-        if self.show_start_button and self.start_button_rect.collidepoint(display_pos):
-            self.hovered_button = "start"
-            return
-
-        if self.show_credits_button and self.credits_button_rect.collidepoint(display_pos):
-            self.hovered_button = "credits"
-            return
-
-        if self.show_menu_buttons:
-            if self.select_level_button_rect.collidepoint(display_pos):
-                self.hovered_button = "select_level"
-                return
-            if self.generate_level_button_rect.collidepoint(display_pos):
-                self.hovered_button = "generate_level"
-                return
+        for item_id, rect in self.menu_item_rects.items():
+            if rect.collidepoint(display_pos):
+                self.hovered_button = item_id
+                break
 
     def handle_click(self, mouse_pos):
         """Handle mouse clicks, return choice string or None"""
         if self.is_loading:
             return None
 
-        # Only handle clicks if title animation is complete
         title_complete = self.phase not in ("title_line1", "title_hold_before_splash", "title_splash", "title_hold_after_splash", "title_line3")
         if not title_complete:
             return None
@@ -585,25 +608,21 @@ class Homepage:
         display_y = int((mouse_pos[1] / self.screen.get_height()) * self.display.get_height())
         display_pos = (display_x, display_y)
 
-        # Visual feedback - set clicked button briefly
         self.clicked_button = self.hovered_button
-        self.click_anim_time = 0.15  # Click animation duration
+        self.click_anim_time = 0.15
 
-        # Check exit button
-        if self.exit_button_rect.collidepoint(display_pos):
-            return "QUIT"
-
-        if self.show_start_button and self.start_button_rect.collidepoint(display_pos):
-            return "SELECT_LEVEL"
-
-        if self.show_credits_button and self.credits_button_rect.collidepoint(display_pos):
-            return "CREDITS"
-
-        if self.show_menu_buttons and self.select_level_button_rect.collidepoint(display_pos):
-            return "SELECT_LEVEL"
-
-        if self.show_menu_buttons and self.generate_level_button_rect.collidepoint(display_pos):
-            return "GENERATE_LEVEL_START"
+        for item_id, rect in self.menu_item_rects.items():
+            if rect.collidepoint(display_pos):
+                if item_id == "exit":
+                    return "QUIT"
+                if item_id == "start":
+                    return "SELECT_LEVEL"
+                if item_id == "credits":
+                    return "CREDITS"
+                if item_id == "select_level":
+                    return "SELECT_LEVEL"
+                if item_id == "generate_level":
+                    return "GENERATE_LEVEL_START"
 
         return None
 
